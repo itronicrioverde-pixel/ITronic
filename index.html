@@ -453,6 +453,8 @@ let filterEstoque='todos', searchEstoque='';
 let relMesSelecionado=null; // mês escolhido nos relatórios (null = mês atual)
 let painelMes='todos'; // mês escolhido no painel ('todos' = geral)
 let vendaCart={cliente:null, produto:null, produtoId:null, desconto:0, pagamentos:[]};
+let vendaModo='aparelho'; // 'aparelho' ou 'acessorio'
+let carrinhoAcess=[]; // itens de acessório no carrinho: {id, qtd}
 
 const CATS = ['iPhone','iPad','Apple Watch','MacBook','AirPods','Acessório'];
 const CAT_ICON = {'iPhone':'📱','iPad':'📲','Apple Watch':'⌚️','MacBook':'💻','AirPods':'🎧','Acessório':'🔌'};
@@ -462,15 +464,48 @@ let dbLoaded=false, savingToCloud=false, cloudVersion=0, renderPendente=false;
 function defaultDB(){
   return {
     users:[{id:uid(),user:'admin',pass:'1234',nome:'Administrador',role:'Administrador'}],
-    produtos:[], clientes:[], vendas:[], compras:[], logins:[], contas:[], caixa:[], categorias:['Fornecedor','Aluguel','Retirada','Despesa','Salário','Outros']
+    produtos:[], acessorios:[], clientes:[], vendas:[], compras:[], logins:[], contas:[], caixa:[], categorias:['Fornecedor','Aluguel','Retirada','Despesa','Salário','Outros'],
+    condPag:{ parcelasCartao:3, descontoDinheiro:5, mostrarPix:true, mostrarCartao:true, mostrarDinheiro:true }
   };
+}
+function vendasVisiveis(){
+  // Admin vê todas as vendas; vendedor vê só as próprias.
+  if(session && session.role==='Administrador') return db.vendas;
+  return db.vendas.filter(v=>v.vendedor===(session?session.nome:''));
+}
+function podeVerPainel(){
+  // Admin sempre vê Painel/Relatórios. Vendedor só se tiver a permissão marcada.
+  if(!session) return false;
+  if(session.role==='Administrador') return true;
+  return !!session.vePainel;
+}
+function reconciliarVendidos(){
+  // Corrige produtos que já foram vendidos mas ficaram como "Disponível"/"Reservado".
+  // Monta a lista de ids de produtos que aparecem em alguma venda.
+  if(!db || !db.vendas || !db.produtos) return;
+  const idsVendidos=new Set();
+  db.vendas.forEach(v=>{ (v.itens||[]).forEach(it=>{ if(it.prodId) idsVendidos.add(it.prodId); }); });
+  let mudou=false;
+  db.produtos.forEach(p=>{
+    if(idsVendidos.has(p.id) && p.status!=='Vendido'){
+      p.status='Vendido';
+      if(!p.vendidoEm){
+        // tenta usar a data da venda correspondente
+        const venda=db.vendas.find(v=>(v.itens||[]).some(it=>it.prodId===p.id));
+        p.vendidoEm=venda?venda.data:todayStr();
+      }
+      mudou=true;
+    }
+  });
+  if(mudou){ try{ localStorage.setItem(DB_KEY, JSON.stringify(db)); }catch(e){} }
 }
 function loadDB(){
   // 1) carrega o cache local na hora, pra abrir rápido mesmo sem internet
   const raw = localStorage.getItem(DB_KEY);
   if(raw){ try{ db = JSON.parse(raw); }catch(e){ db=null; } }
   if(!db) db = defaultDB();
-  if(!db.logins) db.logins=[]; if(!db.contas) db.contas=[]; if(!db.caixa) db.caixa=[]; if(!db.categorias) db.categorias=["Fornecedor","Aluguel","Retirada","Despesa","Salário","Outros"];
+  if(!db.acessorios) db.acessorios=[]; if(!db.condPag) db.condPag={parcelasCartao:3,descontoDinheiro:5,mostrarPix:true,mostrarCartao:true,mostrarDinheiro:true}; if(!db.logins) db.logins=[]; if(!db.contas) db.contas=[]; if(!db.caixa) db.caixa=[]; if(!db.categorias) db.categorias=["Fornecedor","Aluguel","Retirada","Despesa","Salário","Outros"];
+  reconciliarVendidos();
   theme = localStorage.getItem('itronic_theme') || 'light';
 
   // 2) conecta na nuvem e escuta mudanças em tempo real
@@ -495,7 +530,8 @@ function loadDB(){
             if(v < cloudVersion){ return; }
             cloudVersion = v;
             db = parsed;
-            if(!db.logins) db.logins=[]; if(!db.contas) db.contas=[]; if(!db.caixa) db.caixa=[]; if(!db.categorias) db.categorias=["Fornecedor","Aluguel","Retirada","Despesa","Salário","Outros"];
+            if(!db.acessorios) db.acessorios=[]; if(!db.condPag) db.condPag={parcelasCartao:3,descontoDinheiro:5,mostrarPix:true,mostrarCartao:true,mostrarDinheiro:true}; if(!db.logins) db.logins=[]; if(!db.contas) db.contas=[]; if(!db.caixa) db.caixa=[]; if(!db.categorias) db.categorias=["Fornecedor","Aluguel","Retirada","Despesa","Salário","Outros"];
+            reconciliarVendidos();
             localStorage.setItem(DB_KEY, JSON.stringify(db));
             dbLoaded=true;
             // Não redesenha se o usuário está digitando (campo focado) ou fechando uma venda,
@@ -557,7 +593,17 @@ function doLogin(){
   el('lg-pass').value='';
   el('login').style.display='none';
   el('app').style.display='block';
+  aplicarPermissoes();
   go('dash');
+}
+function aplicarPermissoes(){
+  // esconde as abas Painel e Relatórios se o usuário não pode vê-las
+  const ver=podeVerPainel();
+  document.querySelectorAll('.tab').forEach(t=>{
+    if(t.dataset.tab==='painel'||t.dataset.tab==='relatorios'){
+      t.style.display = ver ? '' : 'none';
+    }
+  });
 }
 function logout(){
   session=null;
@@ -570,6 +616,8 @@ function logout(){
 const TITLES={dash:'Início',painel:'Painel',estoque:'Estoque',venda:'Vender',clientes:'Clientes',relatorios:'Relatórios'};
 let currentTab='dash';
 function go(tab){
+  // bloqueia painel/relatórios pra quem não tem permissão
+  if((tab==='painel'||tab==='relatorios') && !podeVerPainel()){ tab='dash'; }
   currentTab=tab;
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===tab));
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
@@ -640,7 +688,7 @@ function dashStats(){
   const t = todayStr();
   const mesAtual = t.slice(0,7);
   let vendaDia=0,vendaMes=0,lucroDia=0,lucroMes=0,aReceber=0;
-  db.vendas.forEach(v=>{
+  vendasVisiveis().forEach(v=>{
     const bruto=Number(v.total)||0, lu=lucroVenda(v);
     if(v.data===t){ vendaDia+=bruto; lucroDia+=lu; }
     if(v.data.slice(0,7)===mesAtual){ vendaMes+=bruto; lucroMes+=lu; }
@@ -795,21 +843,22 @@ function svgRosca(fatias){
 function renderPainel(){
   const isAdmin=session&&session.role==='Administrador';
   const hoje=new Date();
+  const base=vendasVisiveis(); // admin vê tudo; vendedor vê só as próprias
   // meses disponíveis para o seletor
-  const mesesSet=new Set(db.vendas.map(v=>v.data.slice(0,7)));
+  const mesesSet=new Set(base.map(v=>v.data.slice(0,7)));
   for(let i=0;i<6;i++){ const d=new Date(hoje.getFullYear(),hoje.getMonth()-i,1); mesesSet.add(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')); }
   const mesesOpt=[...mesesSet].sort().reverse();
   const nomeMesLong=(m)=>{const[a,mm]=m.split('-');const n=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];return n[parseInt(mm)-1]+'/'+a;};
 
   // conjunto de vendas conforme o filtro de mês
   const filtraMes=(v)=> painelMes==='todos' ? true : v.data.slice(0,7)===painelMes;
-  const vendas=db.vendas.filter(filtraMes);
+  const vendas=base.filter(filtraMes);
 
   // ---------- barras: faturamento e lucro (6 meses) ----------
   const meses6=[];
   for(let i=5;i>=0;i--){ const d=new Date(hoje.getFullYear(),hoje.getMonth()-i,1); meses6.push(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')); }
-  const fatMes=meses6.map(m=>db.vendas.filter(v=>v.data.slice(0,7)===m).reduce((s,v)=>s+vendaLiquido(v),0));
-  const lucMes=meses6.map(m=>db.vendas.filter(v=>v.data.slice(0,7)===m).reduce((s,v)=>s+lucroVenda(v),0));
+  const fatMes=meses6.map(m=>base.filter(v=>v.data.slice(0,7)===m).reduce((s,v)=>s+vendaLiquido(v),0));
+  const lucMes=meses6.map(m=>base.filter(v=>v.data.slice(0,7)===m).reduce((s,v)=>s+lucroVenda(v),0));
   const labels6=meses6.map(nomeMesCurto);
 
   // ---------- indicadores ----------
@@ -824,8 +873,8 @@ function renderPainel(){
   const mesRef = painelMes==='todos' ? (hoje.getFullYear()+'-'+String(hoje.getMonth()+1).padStart(2,'0')) : painelMes;
   const [ra,rm]=mesRef.split('-'); const dPrev=new Date(parseInt(ra),parseInt(rm)-2,1);
   const mesPrev=dPrev.getFullYear()+'-'+String(dPrev.getMonth()+1).padStart(2,'0');
-  const fatRef=db.vendas.filter(v=>v.data.slice(0,7)===mesRef).reduce((s,v)=>s+vendaLiquido(v),0);
-  const fatPrev=db.vendas.filter(v=>v.data.slice(0,7)===mesPrev).reduce((s,v)=>s+vendaLiquido(v),0);
+  const fatRef=base.filter(v=>v.data.slice(0,7)===mesRef).reduce((s,v)=>s+vendaLiquido(v),0);
+  const fatPrev=base.filter(v=>v.data.slice(0,7)===mesPrev).reduce((s,v)=>s+vendaLiquido(v),0);
   const variacao = fatPrev>0 ? ((fatRef-fatPrev)/fatPrev*100) : (fatRef>0?100:0);
 
   // ---------- ranking de mais vendidos ----------
@@ -1053,7 +1102,16 @@ function prodRow(p){
 function renderVenda(){
   const c=vendaCart;
   const disp = db.produtos.filter(p=>p.status==='Disponível');
-  el('page-venda').innerHTML=`
+  const isAdmin=session&&session.role==='Administrador';
+
+  // seletor de modo (Aparelho / Acessórios)
+  const toggle=`
+    <div style="display:flex;gap:8px;margin-bottom:14px">
+      <button class="btn ${vendaModo==='aparelho'?'':'secondary'}" style="flex:1" onclick="vendaModo='aparelho';renderVenda()">📱 Aparelho</button>
+      <button class="btn ${vendaModo==='acessorio'?'':'secondary'}" style="flex:1" onclick="vendaModo='acessorio';renderVenda()">🎧 Acessórios</button>
+    </div>`;
+
+  const blocoCliente=`
     <div class="sec-title">Cliente</div>
     <div class="list">
       <div class="row" onclick="pickCliente()">
@@ -1062,8 +1120,14 @@ function renderVenda(){
         <div class="s">${c.cliente?(c.cliente.telefone||'sem telefone'):'Toque para escolher'}</div></div>
         ${chev()}
       </div>
-    </div>
+    </div>`;
 
+  if(vendaModo==='acessorio'){
+    el('page-venda').innerHTML = toggle + blocoCliente + renderCarrinhoAcess(isAdmin);
+    return;
+  }
+
+  el('page-venda').innerHTML=toggle+blocoCliente+`
     <div class="sec-title">Aparelho</div>
     <div class="list">
       <div class="row" onclick="pickProduto()">
@@ -1091,12 +1155,242 @@ function renderVenda(){
     <div style="height:20px"></div>
   `;
 }
+
+function renderCarrinhoAcess(isAdmin){
+  const acess=db.acessorios||[];
+  const totalCarrinho=carrinhoAcess.reduce((s,it)=>{const a=acess.find(x=>x.id===it.id);return s+(a?(Number(a.venda)||0)*it.qtd:0);},0);
+  const qtdCarrinho=carrinhoAcess.reduce((s,it)=>s+it.qtd,0);
+  return `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin:16px 0 8px">
+      <div class="sec-title" style="margin:0">Acessórios disponíveis</div>
+      <button class="btn secondary" style="width:auto;padding:6px 12px;font-size:13px" onclick="openNovoAcessorio()">+ Cadastrar</button>
+    </div>
+    ${acess.length?`<div class="list">
+      ${acess.map(a=>{
+        const noCarrinho=carrinhoAcess.find(x=>x.id===a.id);
+        const semEstoque=a.qtd<=0;
+        return `<div class="row">
+          <div class="thumb">🎧</div>
+          <div class="info" onclick="acaoAcessorio('${a.id}')"><div class="t">${a.nome}</div><div class="s">${a.sub||''} · ${a.qtd} em estoque${isAdmin&&a.custo?' · custo '+money(a.custo):''}</div></div>
+          <div class="right" style="display:flex;align-items:center;gap:8px">
+            <div class="p money-in">${money(a.venda)}</div>
+            ${semEstoque?`<span style="font-size:12px;color:var(--red)">esgotado</span>`:
+              noCarrinho?`<div style="display:flex;align-items:center;gap:6px">
+                <button onclick="mudarQtdAcess('${a.id}',-1)" style="width:28px;height:28px;border-radius:8px;background:var(--bg2);font-size:18px">−</button>
+                <span style="min-width:20px;text-align:center;font-weight:600">${noCarrinho.qtd}</span>
+                <button onclick="mudarQtdAcess('${a.id}',1)" style="width:28px;height:28px;border-radius:8px;background:var(--bg2);font-size:18px">+</button>
+              </div>`:
+              `<button onclick="mudarQtdAcess('${a.id}',1)" style="width:32px;height:32px;border-radius:8px;background:var(--blue);color:#fff;font-size:20px">+</button>`}
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`:`<div class="empty">Nenhum acessório cadastrado. Toque em "+ Cadastrar".</div>`}
+
+    ${qtdCarrinho>0?`
+      <div class="card" style="margin-top:14px">
+        <div class="detail-line"><span class="k">${qtdCarrinho} item(ns) no carrinho</span><span class="v money-in" style="font-size:18px">${money(totalCarrinho)}</span></div>
+      </div>
+      <button class="btn" onclick="pagamentoAcess()" style="margin-top:10px">Ir para pagamento</button>
+      <button class="btn secondary" onclick="enviarPedidoAcess('whats')" style="margin-top:8px;background:#25D366;color:#fff">📤 Enviar pedido no WhatsApp</button>
+      <button class="btn secondary" onclick="enviarPedidoAcess('copiar')" style="margin-top:8px">Copiar pedido/orçamento</button>
+      <button class="btn ghost" onclick="carrinhoAcess=[];renderVenda()" style="margin-top:4px">Limpar carrinho</button>
+    `:''}
+    <div style="height:20px"></div>
+  `;
+}
+
+function mudarQtdAcess(id,delta){
+  const a=(db.acessorios||[]).find(x=>x.id===id);
+  if(!a) return;
+  let item=carrinhoAcess.find(x=>x.id===id);
+  if(!item){ if(delta>0){ carrinhoAcess.push({id,qtd:1}); } }
+  else{
+    item.qtd+=delta;
+    if(item.qtd<=0) carrinhoAcess=carrinhoAcess.filter(x=>x.id!==id);
+    else if(item.qtd>a.qtd){ item.qtd=a.qtd; toast('Só tem '+a.qtd+' em estoque'); }
+  }
+  renderVenda();
+}
+let tempFotosAcess=[];
+function blocoCondicoes(valor){
+  const c=db.condPag||{parcelasCartao:3,descontoDinheiro:5,mostrarPix:true,mostrarCartao:true,mostrarDinheiro:true};
+  const L=[];
+  L.push('');
+  L.push('*Formas de pagamento:*');
+  if(c.mostrarPix!==false) L.push('💠 À vista Pix: '+money(valor));
+  if(c.mostrarCartao!==false && c.parcelasCartao>1){
+    const parc=valor/c.parcelasCartao;
+    L.push('💳 Cartão '+c.parcelasCartao+'x sem juros: '+c.parcelasCartao+'x de '+money(parc));
+  }
+  if(c.mostrarDinheiro!==false && c.descontoDinheiro>0){
+    const comDesc=valor*(1-c.descontoDinheiro/100);
+    L.push('💵 Dinheiro ('+c.descontoDinheiro+'% desc): '+money(comDesc));
+  }
+  return L.join('\n');
+}
+function acaoAcessorio(id){
+  const a=(db.acessorios||[]).find(x=>x.id===id);
+  if(!a) return;
+  const html=`
+    <div class="list">
+      <div class="row" onclick="closeSheet();setTimeout(()=>editarAcessorio('${id}'),300)"><div class="thumb">✏️</div><div class="info"><div class="t">Editar acessório</div></div></div>
+      <div class="row" onclick="enviarOrcamentoAcess('${id}','whats')"><div class="thumb">📤</div><div class="info"><div class="t">Enviar orçamento (WhatsApp)</div></div></div>
+      <div class="row" onclick="compartilharAcessFoto('${id}')"><div class="thumb">📷</div><div class="info"><div class="t">Compartilhar com foto</div></div></div>
+      <div class="row" onclick="enviarOrcamentoAcess('${id}','copiar')"><div class="thumb">📋</div><div class="info"><div class="t">Copiar orçamento</div></div></div>
+    </div>`;
+  openSheet(a.nome, html);
+}
+function textoAcessorio(a){
+  const L=[];
+  L.push('🎧 *'+a.nome+'*');
+  if(a.sub) L.push('Tipo: '+a.sub);
+  L.push('💰 '+money(a.venda));
+  L.push(blocoCondicoes(a.venda));
+  L.push('');
+  L.push('📲 iTronic Rio Verde');
+  return L.join('\n');
+}
+function enviarOrcamentoAcess(id,modo){
+  const a=(db.acessorios||[]).find(x=>x.id===id);
+  if(!a) return;
+  const texto=textoAcessorio(a);
+  if(modo==='copiar'){
+    const ok=()=>toast('Orçamento copiado');
+    if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(texto).then(ok).catch(()=>copiarFallback(texto,ok));
+    else copiarFallback(texto,ok);
+    return;
+  }
+  const url='https://wa.me/?text='+encodeURIComponent(texto);
+  const el2=document.createElement('a'); el2.href=url; el2.target='_blank'; el2.rel='noopener';
+  document.body.appendChild(el2); el2.click(); el2.remove();
+}
+async function compartilharAcessFoto(id){
+  const a=(db.acessorios||[]).find(x=>x.id===id);
+  if(!a) return;
+  const texto=textoAcessorio(a);
+  const foto=a.fotos&&a.fotos[0];
+  try{
+    if(foto && navigator.canShare){
+      const resp=await fetch(foto); const blob=await resp.blob();
+      const file=new File([blob],'acessorio.jpg',{type:blob.type||'image/jpeg'});
+      if(navigator.canShare({files:[file]})){ await navigator.share({files:[file],text:texto}); return; }
+    }
+    if(navigator.share){ await navigator.share({text:texto}); return; }
+  }catch(e){ if(e&&e.name==='AbortError') return; }
+  enviarOrcamentoAcess(id,'whats');
+}
+function textoPedidoCarrinho(){
+  const acess=db.acessorios||[];
+  const L=[];
+  L.push('🛒 *PEDIDO — iTronic Rio Verde*');
+  if(vendaCart.cliente) L.push('Cliente: '+vendaCart.cliente.nome);
+  L.push('');
+  let total=0;
+  carrinhoAcess.forEach(it=>{
+    const a=acess.find(x=>x.id===it.id); if(!a) return;
+    const sub=(Number(a.venda)||0)*it.qtd; total+=sub;
+    L.push(`• ${it.qtd}x ${a.nome}${a.sub?' ('+a.sub+')':''} — ${money(sub)}`);
+  });
+  L.push('');
+  L.push('*Total: '+money(total)+'*');
+  L.push(blocoCondicoes(total));
+  L.push('');
+  L.push('📲 iTronic Rio Verde');
+  return L.join('\n');
+}
+function enviarPedidoAcess(modo){
+  if(!carrinhoAcess.length){ toast('Carrinho vazio'); return; }
+  const texto=textoPedidoCarrinho();
+  if(modo==='copiar'){
+    const ok=()=>toast('Pedido copiado');
+    if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(texto).then(ok).catch(()=>copiarFallback(texto,ok));
+    else copiarFallback(texto,ok);
+    return;
+  }
+  let fone='';
+  if(vendaCart.cliente && vendaCart.cliente.telefone){ fone=String(vendaCart.cliente.telefone).replace(/\D/g,''); if(fone.length<=11) fone='55'+fone; }
+  const url='https://wa.me/'+fone+'?text='+encodeURIComponent(texto);
+  const el2=document.createElement('a'); el2.href=url; el2.target='_blank'; el2.rel='noopener';
+  document.body.appendChild(el2); el2.click(); el2.remove();
+}
+function openNovoAcessorio(){ formAcessorio(null); }
+function editarAcessorio(id){ const a=(db.acessorios||[]).find(x=>x.id===id); formAcessorio(a); }
+function formAcessorio(a){
+  tempFotosAcess = a ? (a.fotos||[]).slice() : [];
+  const html=`
+    ${fld('Nome do acessório','ac-nome',{ph:'ex: Capinha iPhone 13',val:a?a.nome:''})}
+    ${selFld('Tipo','ac-sub',['Original','Premium'],a?a.sub:'Original')}
+    ${fld('Fornecedor (de onde veio)','ac-forn',{ph:'ex: Distribuidora X',val:a?a.fornecedor:''})}
+    ${fld('Número de série (opcional)','ac-serie',{ph:'deixe vazio se for item de quantidade',val:a?a.serie:''})}
+    ${fld('Preço de venda','ac-venda',{ph:'0,00',val:a?a.venda:''})}
+    ${fld('Custo (só você vê)','ac-custo',{ph:'0,00',val:a?a.custo:''})}
+    ${fld('Quantidade em estoque','ac-qtd',{ph:'0',val:a?a.qtd:''})}
+    <div class="field"><label>Fotos</label>
+      <button class="btn secondary" onclick="el('ac-foto-input').click()" style="width:auto;padding:8px 14px">📷 Adicionar fotos</button>
+      <input type="file" id="ac-foto-input" accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif" multiple style="display:none" onchange="addFotoAcess(event)">
+      <div id="ac-fotos-grid" class="photo-grid" style="margin-top:10px"></div>
+    </div>
+  `;
+  openSheet(a?'Editar acessório':'Novo acessório', html, 'Salvar', ()=>{
+    const nome=getV('ac-nome').trim();
+    if(!nome){ toast('Informe o nome'); return; }
+    const dados={
+      nome, sub:getV('ac-sub'),
+      fornecedor:getV('ac-forn').trim(),
+      serie:getV('ac-serie').trim(),
+      venda:parseFloat(String(getV('ac-venda')).replace(',','.'))||0,
+      custo:parseFloat(String(getV('ac-custo')).replace(',','.'))||0,
+      qtd:parseInt(getV('ac-qtd'))||0,
+      fotos:tempFotosAcess.slice()
+    };
+    if(a){ Object.assign(a,dados); toast('Acessório atualizado'); }
+    else { dados.id=uid(); dados.entrada=todayStr(); db.acessorios.push(dados); toast('Acessório cadastrado'); }
+    saveDB(); closeSheet(); renderVenda();
+  });
+  setTimeout(renderFotosAcess,60);
+  if(a){
+    setTimeout(()=>{
+      const body=el('sheet-body');
+      if(body){ const b=document.createElement('button'); b.className='btn ghost'; b.style.marginTop='10px'; b.style.color='var(--red)'; b.textContent='Excluir acessório';
+        b.onclick=()=>askConfirm('Excluir este acessório?',()=>{ db.acessorios=db.acessorios.filter(x=>x.id!==a.id); carrinhoAcess=carrinhoAcess.filter(x=>x.id!==a.id); saveDB(); closeSheet(); renderVenda(); toast('Excluído'); });
+        body.appendChild(b);
+      }
+    },80);
+  }
+}
+function addFotoAcess(e){
+  const files=Array.from(e.target.files||[]); if(!files.length)return;
+  let pend=files.length, ok=0;
+  files.forEach(file=>{
+    comprimirFoto(file,(dataUrl)=>{
+      if(dataUrl){ tempFotosAcess.push(dataUrl); ok++; }
+      pend--; if(pend===0){ renderFotosAcess(); if(ok>0) toast(ok>1?ok+' fotos adicionadas':'Foto adicionada'); }
+    });
+  });
+  e.target.value='';
+}
+function renderFotosAcess(){
+  const g=el('ac-fotos-grid'); if(!g) return;
+  g.innerHTML=tempFotosAcess.map((f,i)=>`<div style="position:relative;display:inline-block"><img class="ph" style="width:80px;height:80px" src="${f}"><button onclick="tempFotosAcess.splice(${i},1);renderFotosAcess()" style="position:absolute;top:-6px;right:-6px;background:var(--red);color:#fff;width:22px;height:22px;border-radius:50%;font-size:14px">×</button></div>`).join('');
+}
+
+function pagamentoAcess(){
+  if(!vendaCart.cliente){ toast('Selecione o cliente'); return; }
+  if(!carrinhoAcess.length){ toast('Carrinho vazio'); return; }
+  const acess=db.acessorios||[];
+  const total=carrinhoAcess.reduce((s,it)=>{const a=acess.find(x=>x.id===it.id);return s+(a?(Number(a.venda)||0)*it.qtd:0);},0);
+  // reaproveita a tela de pagamento existente: monta um "produto virtual" com o total
+  vendaCart.produto={ _acessorios:true, venda:total, marca:'Acessórios', modelo:'('+carrinhoAcess.reduce((s,it)=>s+it.qtd,0)+' itens)', compra:carrinhoAcess.reduce((s,it)=>{const a=acess.find(x=>x.id===it.id);return s+(a?(Number(a.custo)||0)*it.qtd:0);},0) };
+  vendaCart.produtoId=null;
+  vendaCart.desconto=0;
+  openPagamento();
+}
 function updateVendaTotal(){
   const p=produtoAtualVenda(); if(!p)return;
   const t=(p.venda||0)-(vendaCart.desconto||0);
   const e=el('venda-total'); if(e) e.textContent=money(t);
 }
-function resetVenda(){ vendaCart={cliente:null,produto:null,produtoId:null,desconto:0,pagamentos:[]}; }
+function resetVenda(){ vendaCart={cliente:null,produto:null,produtoId:null,desconto:0,pagamentos:[]}; carrinhoAcess=[]; }
 
 /* ============ CLIENTES ============ */
 function renderClientes(){
@@ -1119,13 +1413,13 @@ function renderClientes(){
 function renderRelatorios(){
   const isAdmin=session&&session.role==='Administrador';
   const mes=relMesSelecionado||todayStr().slice(0,7);
-  const vendasMes=db.vendas.filter(v=>v.data.slice(0,7)===mes);
+  const vendasMes=vendasVisiveis().filter(v=>v.data.slice(0,7)===mes);
   const totalMes=vendasMes.reduce((s,v)=>s+vendaLiquido(v),0);
   const lucroMes=vendasMes.reduce((s,v)=>s+lucroVenda(v),0);
   const invest=db.produtos.filter(p=>p.status!=='Vendido').reduce((s,p)=>s+(Number(p.compra)||0),0);
 
   // monta a lista de meses que têm venda + os últimos 12 meses, pra escolher
-  const mesesComVenda=new Set(db.vendas.map(v=>v.data.slice(0,7)));
+  const mesesComVenda=new Set(vendasVisiveis().map(v=>v.data.slice(0,7)));
   const hoje=new Date();
   for(let i=0;i<12;i++){
     const d=new Date(hoje.getFullYear(),hoje.getMonth()-i,1);
@@ -1478,6 +1772,7 @@ function textoOrcamento(p){
   }
   L.push('');
   L.push('💰 *'+money(p.venda)+'*');
+  L.push(blocoCondicoes(p.venda));
   L.push('');
   L.push('iTronic Rio Verde');
   return L.join('\n');
@@ -1918,24 +2213,39 @@ function finalizarVenda(total,falta){
   const liquido=pagState.reduce((s,p)=>s+liquidoDe(p),0) - (falta>0?0:0);
   const p=produtoAtualVenda();
   if(!p){ toast('Aparelho não encontrado, selecione novamente'); return; }
+  const ehAcessorio = p && p._acessorios;
+  let itensVenda;
+  if(ehAcessorio){
+    const acess=db.acessorios||[];
+    itensVenda=carrinhoAcess.map(it=>{ const a=acess.find(x=>x.id===it.id)||{}; return {acessId:it.id, nome:a.nome, cat:'Acessório', sub:a.sub, qtd:it.qtd, venda:(Number(a.venda)||0)*it.qtd, compra:(Number(a.custo)||0)*it.qtd}; });
+  }else{
+    itensVenda=[{prodId:p.id, nome:p.marca+' '+p.modelo, cat:p.cat, venda:p.venda, compra:p.compra}];
+  }
   const venda={
     id:uid(), clienteId:vendaCart.cliente.id, clienteNome:vendaCart.cliente.nome,
     data:todayStr(), hora:new Date().toLocaleTimeString('pt-BR'),
     vendedor:session.nome,
-    itens:[{prodId:p.id, nome:p.marca+' '+p.modelo, cat:p.cat, venda:p.venda, compra:p.compra}],
+    itens:itensVenda,
+    tipo: ehAcessorio?'acessorio':'aparelho',
     total, desconto:vendaCart.desconto||0,
     pagamentos:pagState.map(x=>({...x})),
     liquido: aReceber>0? liquido : liquido, // líquido do que entrou
     aReceber
   };
   db.vendas.push(venda);
-  // marca produto como vendido
-  p.status='Vendido';
-  p.vendidoEm=todayStr();
+  if(ehAcessorio){
+    // baixa a quantidade de cada acessório vendido
+    carrinhoAcess.forEach(it=>{ const a=(db.acessorios||[]).find(x=>x.id===it.id); if(a){ a.qtd=Math.max(0,(Number(a.qtd)||0)-it.qtd); } });
+  }else{
+    // marca produto como vendido
+    p.status='Vendido';
+    p.vendidoEm=todayStr();
+  }
   // O aparelho de troca já foi cadastrado no estoque na hora do cadastro completo.
   saveDB();
   closeSheet();
   resetVenda();
+  vendaModo='aparelho';
   toast('Venda registrada ✓');
   go('dash');
 }
@@ -2396,7 +2706,7 @@ function relVendas(){
   const mes=relMesSelecionado||todayStr().slice(0,7);
   const nomes=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   const[a,mm]=mes.split('-'); const nomeMes=nomes[parseInt(mm)-1]+'/'+a;
-  const vs=db.vendas.filter(v=>v.data.slice(0,7)===mes).slice().reverse();
+  const vs=vendasVisiveis().filter(v=>v.data.slice(0,7)===mes).slice().reverse();
   const totalMes=vs.reduce((s,v)=>s+vendaLiquido(v),0);
   const html=vs.length?`
     <div class="card" style="padding:2px 16px;margin-bottom:12px">
@@ -2426,7 +2736,7 @@ function relLucro(){
   const mes=relMesSelecionado||todayStr().slice(0,7);
   const nomes=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   const[a,mm]=mes.split('-'); const nomeMes=nomes[parseInt(mm)-1]+'/'+a;
-  const vs=db.vendas.filter(v=>v.data.slice(0,7)===mes).slice().reverse();
+  const vs=vendasVisiveis().filter(v=>v.data.slice(0,7)===mes).slice().reverse();
   const totLucro=vs.reduce((s,v)=>s+lucroVenda(v),0);
   const html=`
     <div class="big-num money-in ${totLucro>=0?'pos':'neg'}">${money(totLucro)}</div>
@@ -2450,7 +2760,8 @@ function openMenu(){
       <div class="link-row" onclick="openFinanceiro('pagar')">Financeiro (contas a pagar e receber) ${chev()}</div>
       <div class="link-row" onclick="openCompra()">Registrar compra ${chev()}</div>
       <div class="link-row" onclick="openSimulador()">Simulador de pagamento ${chev()}</div>
-      ${isAdmin?`<div class="link-row" onclick="openUsuarios()">Usuários e acessos ${chev()}</div>
+      ${isAdmin?`<div class="link-row" onclick="openCondPag()">Condições de pagamento (orçamento) ${chev()}</div>
+      <div class="link-row" onclick="openUsuarios()">Usuários e acessos ${chev()}</div>
       <div class="link-row" onclick="openLogins()">Histórico de acessos ${chev()}</div>`:''}
     </div>
     <div class="sec-title">Backup e segurança</div>
@@ -2479,12 +2790,47 @@ function zerarSistema(){
     }, 'Sim, apagar tudo');
   }, 'Continuar');
 }
+function openCondPag(){
+  const c=db.condPag||{parcelasCartao:3,descontoDinheiro:5,mostrarPix:true,mostrarCartao:true,mostrarDinheiro:true};
+  const html=`
+    <div style="font-size:13px;color:var(--text2);margin-bottom:12px">Essas condições aparecem no orçamento que você envia pro cliente.</div>
+    <label style="display:flex;align-items:center;gap:8px;margin:10px 0;font-size:14px"><input type="checkbox" id="cp-pix" ${c.mostrarPix!==false?'checked':''}> Mostrar "À vista Pix"</label>
+    <label style="display:flex;align-items:center;gap:8px;margin:10px 0;font-size:14px"><input type="checkbox" id="cp-cartao" ${c.mostrarCartao!==false?'checked':''}> Mostrar "Cartão parcelado"</label>
+    ${fld('Parcelas no cartão (sem juros)','cp-parc',{ph:'3',val:c.parcelasCartao,inputmode:'numeric'})}
+    <label style="display:flex;align-items:center;gap:8px;margin:10px 0;font-size:14px"><input type="checkbox" id="cp-dinheiro" ${c.mostrarDinheiro!==false?'checked':''}> Mostrar "Dinheiro com desconto"</label>
+    ${fld('Desconto no dinheiro (%)','cp-desc',{ph:'5',val:c.descontoDinheiro,inputmode:'numeric'})}
+  `;
+  openSheet('Condições de pagamento', html, 'Salvar', ()=>{
+    db.condPag={
+      mostrarPix: el('cp-pix').checked,
+      mostrarCartao: el('cp-cartao').checked,
+      parcelasCartao: parseInt(getV('cp-parc'))||1,
+      mostrarDinheiro: el('cp-dinheiro').checked,
+      descontoDinheiro: parseFloat(String(getV('cp-desc')).replace(',','.'))||0
+    };
+    saveDB(); closeSheet(); toast('Condições salvas');
+  });
+}
 function openUsuarios(){
   const html=`
     <button class="btn secondary" onclick="closeSheet();setTimeout(openNovoUser,320)" style="margin-bottom:14px">+ Novo usuário</button>
-    <div class="list">${db.users.map(u=>`<div class="row"><div class="thumb">👤</div><div class="info"><div class="t">${u.nome}</div><div class="s">${u.user} · ${u.role}</div></div>${u.user!=='admin'?`<button onclick="delUser('${u.id}')" style="color:var(--red)">Excluir</button>`:''}</div>`).join('')}</div>
+    <div class="list">${db.users.map(u=>{
+      const ehAdmin=u.role==='Administrador';
+      const perm = ehAdmin ? 'Vê tudo' : (u.vePainel?'Vê Painel ✅':'Sem Painel');
+      const btnPerm = ehAdmin ? '' : `<button onclick="toggleVePainel('${u.id}')" style="color:var(--blue);font-size:13px">${u.vePainel?'Tirar Painel':'Dar Painel'}</button>`;
+      return `<div class="row"><div class="thumb">👤</div><div class="info"><div class="t">${u.nome}</div><div class="s">${u.user} · ${u.role} · ${perm}</div></div>${btnPerm}${u.user!=='admin'?`<button onclick="delUser('${u.id}')" style="color:var(--red);margin-left:10px">Excluir</button>`:''}</div>`;
+    }).join('')}</div>
   `;
   openSheet('Usuários', html);
+}
+function toggleVePainel(id){
+  const u=db.users.find(x=>x.id===id);
+  if(!u) return;
+  u.vePainel=!u.vePainel;
+  // se for o usuário logado, atualiza a sessão na hora
+  if(session && session.id===id){ session.vePainel=u.vePainel; aplicarPermissoes(); }
+  saveDB(); openUsuarios();
+  toast(u.vePainel?'Painel liberado':'Painel bloqueado');
 }
 function openNovoUser(){
   const html=`
@@ -2492,12 +2838,14 @@ function openNovoUser(){
     ${fld('Usuário (login)','u-user',{ph:'ex: joao'})}
     ${fld('Senha','u-pass',{ph:'senha'})}
     ${selFld('Nível de acesso','u-role',['Vendedor','Administrador'],'Vendedor')}
+    <label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:14px"><input type="checkbox" id="u-vepainel"> Pode ver Painel e Relatórios</label>
   `;
   openSheet('Novo usuário', html, 'Salvar', ()=>{
     const nome=getV('u-nome'),user=getV('u-user').toLowerCase(),pass=getV('u-pass');
     if(!nome||!user||!pass){toast('Preencha tudo');return;}
     if(db.users.some(x=>x.user===user)){toast('Usuário já existe');return;}
-    db.users.push({id:uid(),nome,user,pass,role:getV('u-role')});
+    const vePainel=el('u-vepainel')&&el('u-vepainel').checked;
+    db.users.push({id:uid(),nome,user,pass,role:getV('u-role'),vePainel});
     saveDB(); closeSheet(); toast('Usuário criado');
   });
 }
@@ -2631,6 +2979,6 @@ try{
 }catch(e){}
 
 </script>
-<div style="position:fixed;bottom:2px;right:4px;font-size:10px;color:#888;z-index:99999;pointer-events:none">v-troca-2026-u</div>
+<div style="position:fixed;bottom:2px;right:4px;font-size:10px;color:#888;z-index:99999;pointer-events:none">v-troca-2026-ab</div>
 </body>
 </html>
