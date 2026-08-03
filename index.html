@@ -465,7 +465,8 @@ function defaultDB(){
   return {
     users:[{id:uid(),user:'admin',pass:'1234',nome:'Administrador',role:'Administrador'}],
     produtos:[], acessorios:[], clientes:[], vendas:[], compras:[], logins:[], contas:[], caixa:[], categorias:['Fornecedor','Aluguel','Retirada','Despesa','Salário','Outros'],
-    condPag:{ parcelasCartao:3, descontoDinheiro:5, mostrarPix:true, mostrarCartao:true, mostrarDinheiro:true }
+    condPag:{ parcelasCartao:3, descontoDinheiro:5, mostrarPix:true, mostrarCartao:true, mostrarDinheiro:true },
+    taxasCartao:{ debito:1.5, credito:[3.5,4.5,5.5,6.5,7.5,8.5,9.5,10.5,11.5,12.5,13.5,14.5,15.5,16.5,17.5,18.5,19.5,20.5,21.5,22.5,23.5] }
   };
 }
 function vendasVisiveis(){
@@ -504,7 +505,7 @@ function loadDB(){
   const raw = localStorage.getItem(DB_KEY);
   if(raw){ try{ db = JSON.parse(raw); }catch(e){ db=null; } }
   if(!db) db = defaultDB();
-  if(!db.acessorios) db.acessorios=[]; if(!db.condPag) db.condPag={parcelasCartao:3,descontoDinheiro:5,mostrarPix:true,mostrarCartao:true,mostrarDinheiro:true}; if(!db.logins) db.logins=[]; if(!db.contas) db.contas=[]; if(!db.caixa) db.caixa=[]; if(!db.categorias) db.categorias=["Fornecedor","Aluguel","Retirada","Despesa","Salário","Outros"];
+  if(!db.acessorios) db.acessorios=[]; if(!db.condPag) db.condPag={parcelasCartao:3,descontoDinheiro:5,mostrarPix:true,mostrarCartao:true,mostrarDinheiro:true}; if(!db.taxasCartao) db.taxasCartao={debito:1.5,credito:[3.5,4.5,5.5,6.5,7.5,8.5,9.5,10.5,11.5,12.5,13.5,14.5,15.5,16.5,17.5,18.5,19.5,20.5,21.5,22.5,23.5]}; if(!db.logins) db.logins=[]; if(!db.contas) db.contas=[]; if(!db.caixa) db.caixa=[]; if(!db.categorias) db.categorias=["Fornecedor","Aluguel","Retirada","Despesa","Salário","Outros"];
   reconciliarVendidos();
   theme = localStorage.getItem('itronic_theme') || 'light';
 
@@ -530,7 +531,7 @@ function loadDB(){
             if(v < cloudVersion){ return; }
             cloudVersion = v;
             db = parsed;
-            if(!db.acessorios) db.acessorios=[]; if(!db.condPag) db.condPag={parcelasCartao:3,descontoDinheiro:5,mostrarPix:true,mostrarCartao:true,mostrarDinheiro:true}; if(!db.logins) db.logins=[]; if(!db.contas) db.contas=[]; if(!db.caixa) db.caixa=[]; if(!db.categorias) db.categorias=["Fornecedor","Aluguel","Retirada","Despesa","Salário","Outros"];
+            if(!db.acessorios) db.acessorios=[]; if(!db.condPag) db.condPag={parcelasCartao:3,descontoDinheiro:5,mostrarPix:true,mostrarCartao:true,mostrarDinheiro:true}; if(!db.taxasCartao) db.taxasCartao={debito:1.5,credito:[3.5,4.5,5.5,6.5,7.5,8.5,9.5,10.5,11.5,12.5,13.5,14.5,15.5,16.5,17.5,18.5,19.5,20.5,21.5,22.5,23.5]}; if(!db.logins) db.logins=[]; if(!db.contas) db.contas=[]; if(!db.caixa) db.caixa=[]; if(!db.categorias) db.categorias=["Fornecedor","Aluguel","Retirada","Despesa","Salário","Outros"];
             reconciliarVendidos();
             localStorage.setItem(DB_KEY, JSON.stringify(db));
             dbLoaded=true;
@@ -785,7 +786,7 @@ function renderDash(){
     <div class="list">
       <div class="row" onclick="go('venda')"><div class="thumb">🛒</div><div class="info"><div class="t">Nova venda</div><div class="s">Fechar uma venda agora</div></div>${chev()}</div>
       <div class="row" onclick="openCompra()"><div class="thumb">📦</div><div class="info"><div class="t">Registrar compra</div><div class="s">Entrada de aparelhos no estoque</div></div>${chev()}</div>
-      <div class="row" onclick="openSimulador()"><div class="thumb">🧮</div><div class="info"><div class="t">Simulador de pagamento</div><div class="s">Testar desconto, parcelas e taxa</div></div>${chev()}</div>
+      <div class="row" onclick="openSimulador()"><div class="thumb">🧮</div><div class="info"><div class="t">Simulador de troca</div><div class="s">Troca de usado, parcelas e taxas</div></div>${chev()}</div>
     </div>
     <div style="height:20px"></div>
   `;
@@ -2398,20 +2399,111 @@ function salvarCompra(){
 }
 
 /* ============ SIMULADOR ============ */
+const MODELOS_IPHONE=['iPhone 14','iPhone 14 Plus','iPhone 14 Pro','iPhone 14 Pro Max','iPhone 15','iPhone 15 Plus','iPhone 15 Pro','iPhone 15 Pro Max','iPhone 16','iPhone 16 Plus','iPhone 16 Pro','iPhone 16 Pro Max','iPhone 16e','iPhone 17','iPhone 17 Plus','iPhone 17 Pro','iPhone 17 Pro Max'];
+let simState={parcCred:1};
 function openSimulador(){
+  const opt=(sel)=>MODELOS_IPHONE.map(m=>`<option value="${m}" ${m===sel?'selected':''}>${m}</option>`).join('');
   const html=`
-    <div class="mini-lbl">Valor do produto</div>
-    <input class="input" id="sim-valor" type="number" inputmode="decimal" placeholder="0,00" oninput="calcSim()">
-    <div class="form-row" style="margin-top:12px">
-      <div><div class="mini-lbl">Desconto (R$)</div><input class="input" id="sim-desc" type="number" inputmode="decimal" placeholder="0,00" oninput="calcSim()"></div>
-      <div><div class="mini-lbl">Parcelas</div><input class="input" id="sim-parc" type="number" inputmode="numeric" placeholder="1" value="1" oninput="calcSim()"></div>
+    <div class="mini-lbl">iPhone novo (que o cliente leva)</div>
+    <select class="input" id="sim-mod-novo">${opt('iPhone 15')}</select>
+    <input class="input" id="sim-val-novo" type="text" inputmode="decimal" placeholder="Valor do novo (R$)" oninput="calcSimTroca()" style="margin-top:8px">
+
+    <div class="mini-lbl" style="margin-top:14px">iPhone usado (que entra na troca)</div>
+    <select class="input" id="sim-mod-usado">${opt('iPhone 14')}</select>
+    <input class="input" id="sim-val-usado" type="text" inputmode="decimal" placeholder="Valor que você paga no usado (R$)" oninput="calcSimTroca()" style="margin-top:8px">
+
+    <div class="card" style="margin-top:16px;background:var(--bg2);box-shadow:none">
+      <div class="detail-line"><span class="k">Diferença a pagar</span><span class="v money-in" id="sim-difer" style="font-size:20px;font-weight:700">R$ 0,00</span></div>
     </div>
-    <div style="margin-top:12px"><div class="mini-lbl">Taxa do cartão (%)</div><input class="input" id="sim-taxa" type="number" inputmode="decimal" placeholder="ex: 4,5" oninput="calcSim()"></div>
-    <div class="card" style="margin-top:18px" id="sim-out"></div>
+
+    <div class="mini-lbl" style="margin-top:14px">Parcelas no crédito</div>
+    <select class="input" id="sim-parc" onchange="simState.parcCred=parseInt(this.value);calcSimTroca()">
+      ${Array.from({length:21},(_,i)=>i+1).map(n=>`<option value="${n}" ${n===simState.parcCred?'selected':''}>${n}x</option>`).join('')}
+    </select>
+
+    <div class="card" style="margin-top:16px" id="sim-out"></div>
+    <button class="btn" onclick="copiarSimTroca()" style="margin-top:12px;background:#25D366">📤 Copiar orçamento pro WhatsApp</button>
+    <button class="btn secondary" onclick="openTaxasCartao()" style="margin-top:8px">⚙️ Ajustar taxas do cartão</button>
   `;
-  openSheet('Simulador', html);
-  calcSim();
+  openSheet('Simulador de troca', html);
+  calcSimTroca();
 }
+function calcSimTroca(){
+  const vNovo=parseFloat(String(getV('sim-val-novo')).replace(',','.'))||0;
+  const vUsado=parseFloat(String(getV('sim-val-usado')).replace(',','.'))||0;
+  const difer=Math.max(0,vNovo-vUsado);
+  const eldif=el('sim-difer'); if(eldif) eldif.textContent=money(difer);
+  const tx=db.taxasCartao||{debito:1.5,credito:[]};
+  const parc=simState.parcCred||1;
+  // taxa repassada pro cliente: valor / (1 - taxa%)
+  const comTaxa=(base,taxa)=> taxa>0 ? base/(1-taxa/100) : base;
+  const taxaCred=(tx.credito&&tx.credito[parc-1])||0;
+  const vDebito=comTaxa(difer,tx.debito);
+  const vCredito=comTaxa(difer,taxaCred);
+  const out=el('sim-out');
+  if(out){
+    out.innerHTML=`
+      <div class="detail-line"><span class="k">💠 À vista Pix</span><span class="v money-in">${money(difer)}</span></div>
+      <div class="detail-line"><span class="k">💳 Débito (${tx.debito}%)</span><span class="v money-in">${money(vDebito)}</span></div>
+      <div class="detail-line"><span class="k">💳 Crédito ${parc}x (${taxaCred}%)</span><span class="v money-in">${money(vCredito)}</span></div>
+      <div class="detail-line"><span class="k" style="padding-left:12px">${parc}x de</span><span class="v money-in">${money(vCredito/parc)}</span></div>
+    `;
+  }
+}
+function textoSimTroca(){
+  const vNovo=parseFloat(String(getV('sim-val-novo')).replace(',','.'))||0;
+  const vUsado=parseFloat(String(getV('sim-val-usado')).replace(',','.'))||0;
+  const modNovo=getV('sim-mod-novo'), modUsado=getV('sim-mod-usado');
+  const difer=Math.max(0,vNovo-vUsado);
+  const tx=db.taxasCartao||{debito:1.5,credito:[]};
+  const parc=simState.parcCred||1;
+  const comTaxa=(base,taxa)=> taxa>0 ? base/(1-taxa/100) : base;
+  const taxaCred=(tx.credito&&tx.credito[parc-1])||0;
+  const vDebito=comTaxa(difer,tx.debito);
+  const vCredito=comTaxa(difer,taxaCred);
+  const L=[];
+  L.push('📱 *Proposta de troca — iTronic Rio Verde*');
+  L.push('');
+  L.push('Novo: *'+modNovo+'* — '+money(vNovo));
+  L.push('Seu usado: '+modUsado+' — '+money(vUsado));
+  L.push('');
+  L.push('*Diferença a pagar: '+money(difer)+'*');
+  L.push('');
+  L.push('*Formas de pagamento:*');
+  L.push('💠 À vista Pix: '+money(difer));
+  L.push('💳 Débito: '+money(vDebito));
+  L.push('💳 Crédito '+parc+'x: '+parc+'x de '+money(vCredito/parc)+' (total '+money(vCredito)+')');
+  L.push('');
+  L.push('📲 iTronic Rio Verde');
+  return L.join('\n');
+}
+function copiarSimTroca(){
+  const texto=textoSimTroca();
+  const ok=()=>toast('Orçamento copiado');
+  if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(texto).then(ok).catch(()=>copiarFallback(texto,ok));
+  else copiarFallback(texto,ok);
+}
+function openTaxasCartao(){
+  const tx=db.taxasCartao||{debito:1.5,credito:[]};
+  const linhas=Array.from({length:21},(_,i)=>`
+    <div style="display:flex;align-items:center;gap:10px;margin:4px 0">
+      <span style="width:40px;font-size:14px">${i+1}x</span>
+      <input class="input" id="tx-c-${i}" type="text" inputmode="decimal" value="${tx.credito&&tx.credito[i]!=null?tx.credito[i]:''}" placeholder="%" style="flex:1">
+    </div>`).join('');
+  const html=`
+    <div class="mini-lbl">Taxa do débito (%)</div>
+    <input class="input" id="tx-debito" type="text" inputmode="decimal" value="${tx.debito||''}" placeholder="ex: 1,5">
+    <div class="mini-lbl" style="margin-top:14px">Taxas do crédito por parcela (%)</div>
+    ${linhas}
+  `;
+  openSheet('Taxas do cartão', html, 'Salvar', ()=>{
+    const cred=[];
+    for(let i=0;i<21;i++){ cred.push(parseFloat(String(getV('tx-c-'+i)).replace(',','.'))||0); }
+    db.taxasCartao={ debito:parseFloat(String(getV('tx-debito')).replace(',','.'))||0, credito:cred };
+    saveDB(); closeSheet(); setTimeout(openSimulador,300); toast('Taxas salvas');
+  });
+}
+function calcSim(){ /* simulador antigo removido */ }
 /* ============ FLUXO DE CAIXA ============ */
 let caixaPeriodo='dia';
 function caixaSaldoHoje(){ return resumoCaixa('dia').saldo; }
@@ -2693,20 +2785,6 @@ function quitarConta(id){ const c=db.contas.find(x=>x.id===id); c.status='pago';
 function reabrirConta(id){ const c=db.contas.find(x=>x.id===id); c.status='pendente'; delete c.pagoEm; saveDB(); closeSheet(); toast('Conta reaberta'); }
 function delConta(id){ askConfirm('Remover esta conta?', ()=>{ db.contas=db.contas.filter(c=>c.id!==id); saveDB(); closeSheet(); if(currentTab==='dash')render('dash'); toast('Conta removida'); }); }
 
-function calcSim(){
-  const valor=getN('sim-valor'), desc=getN('sim-desc'), parc=Math.max(1,getN('sim-parc')||1), taxa=getN('sim-taxa');
-  const final=Math.max(0,valor-desc);
-  const juros=final*taxa/100;
-  const totalCliente=final+juros;
-  const porParc=totalCliente/parc;
-  el('sim-out').innerHTML=`
-    <div class="detail-line"><span class="k">Valor final</span><span class="v money-in">${money(final)}</span></div>
-    <div class="detail-line"><span class="k">Juros do cartão (${taxa||0}%)</span><span class="v money-in neg">+ ${money(juros)}</span></div>
-    <div class="detail-line"><span class="k">Cliente paga</span><span class="v money-in" style="font-size:17px">${money(totalCliente)}</span></div>
-    <div class="detail-line"><span class="k">Parcelamento</span><span class="v money-in">${parc}x de ${money(porParc)}</span></div>
-  `;
-}
-
 /* ============ RELATÓRIOS (detalhe) ============ */
 function relVendas(){
   const mes=relMesSelecionado||todayStr().slice(0,7);
@@ -2765,7 +2843,7 @@ function openMenu(){
       <div class="link-row" onclick="openCaixa('dia')">Fluxo de caixa (entradas e saídas) ${chev()}</div>
       <div class="link-row" onclick="openFinanceiro('pagar')">Financeiro (contas a pagar e receber) ${chev()}</div>
       <div class="link-row" onclick="openCompra()">Registrar compra ${chev()}</div>
-      <div class="link-row" onclick="openSimulador()">Simulador de pagamento ${chev()}</div>
+      <div class="link-row" onclick="openSimulador()">Simulador de troca ${chev()}</div>
       ${isAdmin?`<div class="link-row" onclick="openCondPag()">Condições de pagamento (orçamento) ${chev()}</div>
       <div class="link-row" onclick="openUsuarios()">Usuários e acessos ${chev()}</div>
       <div class="link-row" onclick="openLogins()">Histórico de acessos ${chev()}</div>`:''}
@@ -2985,6 +3063,6 @@ try{
 }catch(e){}
 
 </script>
-<div style="position:fixed;bottom:2px;right:4px;font-size:10px;color:#888;z-index:99999;pointer-events:none">v-troca-2026-ad</div>
+<div style="position:fixed;bottom:2px;right:4px;font-size:10px;color:#888;z-index:99999;pointer-events:none">v-troca-2026-ae</div>
 </body>
 </html>
