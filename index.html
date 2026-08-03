@@ -476,6 +476,10 @@ function vendasVisiveis(){
   if(session && session.role==='Administrador') return db.vendas;
   return db.vendas.filter(v=>v.vendedor===(session?session.nome:''));
 }
+function podeEditar(){
+  // Só o administrador cadastra/edita/exclui. Vendedor só vende.
+  return session && session.role==='Administrador';
+}
 function podeVerPainel(){
   // Admin sempre vê Painel/Relatórios. Vendedor só se tiver a permissão marcada.
   if(!session) return false;
@@ -628,7 +632,7 @@ function go(tab){
   el('page-title').textContent=TITLES[tab];
   // FAB só em telas que criam algo
   const fab=el('fab');
-  if(tab==='estoque'){ fab.style.display='flex'; fab.innerHTML=plusIcon(); }
+  if(tab==='estoque' && podeEditar()){ fab.style.display='flex'; fab.innerHTML=plusIcon(); }
   else if(tab==='clientes'){ fab.style.display='flex'; fab.innerHTML=plusIcon(); }
   else fab.style.display='none';
   render(tab);
@@ -1097,7 +1101,7 @@ function prodRow(p){
       <div class="s">${[p.cor,p.armazenamento,p.condicao].filter(Boolean).join(' · ')}</div>
       <span class="badge ${b}">${p.status}</span>
     </div>
-    <div class="right"><div><div class="p money-in">${money(p.venda)}</div>${Number(p.compra)?`<div class="neg" style="font-size:12px;text-align:right">(${money(p.compra)})</div>`:''}</div>${chev()}</div>
+    <div class="right"><div><div class="p money-in">${money(p.venda)}</div>${podeEditar()&&Number(p.compra)?`<div class="neg" style="font-size:12px;text-align:right">(${money(p.compra)})</div>`:''}</div>${chev()}</div>
   </div>`;
 }
 
@@ -1149,6 +1153,7 @@ function renderVenda(){
     </div>
 
     ${c.produto?`
+    ${isAdmin?`
     <div class="sec-title">Desconto</div>
     <div class="card">
       <div class="inline-2">
@@ -1158,6 +1163,13 @@ function renderVenda(){
           <div id="venda-total" style="font-size:20px;font-weight:700" class="money-in">${money((c.produto.venda||0)-(c.desconto||0))}</div>
         </div>
       </div>
+    </div>`:`
+    <div class="card">
+      <div class="detail-line"><span class="k">Total</span><span class="v money-in" style="font-size:20px;font-weight:700">${money(c.produto.venda||0)}</span></div>
+    </div>`}
+    <div class="sec-title">Observação (opcional)</div>
+    <div class="card">
+      <textarea class="input" placeholder="Ex: cliente vai buscar amanhã, combinou algo..." oninput="vendaCart.obs=this.value" style="width:100%;min-height:70px;resize:vertical">${c.obs||''}</textarea>
     </div>
     <button class="btn" onclick="openPagamento()" style="margin-top:6px">Ir para pagamento</button>
     <button class="btn ghost" onclick="resetVenda();renderVenda()" style="margin-top:4px">Limpar venda</button>
@@ -1173,7 +1185,7 @@ function renderCarrinhoAcess(isAdmin){
   return `
     <div style="display:flex;justify-content:space-between;align-items:center;margin:16px 0 8px">
       <div class="sec-title" style="margin:0">Acessórios disponíveis</div>
-      <button class="btn secondary" style="width:auto;padding:6px 12px;font-size:13px" onclick="openNovoAcessorio()">+ Cadastrar</button>
+      ${podeEditar()?`<button class="btn secondary" style="width:auto;padding:6px 12px;font-size:13px" onclick="openNovoAcessorio()">+ Cadastrar</button>`:''}
     </div>
     ${acess.length?`<div class="list">
       ${acess.map(a=>{
@@ -1187,7 +1199,7 @@ function renderCarrinhoAcess(isAdmin){
           <div class="info" onclick="acaoAcessorio('${a.id}')"><div class="t">${a.nome}</div><div class="s"><span style="color:${badgeCor};font-weight:600">${badgeTxt}</span>${a.sub?' · '+a.sub:''}${isAdmin&&a.custo?' · custo '+money(a.custo):''}</div></div>
           <div class="right" style="display:flex;align-items:center;gap:8px">
             <div class="p money-in">${money(a.venda)}</div>
-            ${!vendavel?`<span style="font-size:12px;color:${badgeCor};max-width:80px;text-align:right">${situacao==='Disponível'?'esgotado':situacao}</span>`:
+            ${!vendavel?`${a.qtd>0&&situacao==='Disponível'?'':''}`:
               noCarrinho?`<div style="display:flex;align-items:center;gap:6px">
                 <button onclick="mudarQtdAcess('${a.id}',-1)" style="width:28px;height:28px;border-radius:8px;background:var(--bg2);font-size:18px">−</button>
                 <span style="min-width:20px;text-align:center;font-weight:600">${noCarrinho.qtd}</span>
@@ -1247,7 +1259,7 @@ function acaoAcessorio(id){
   if(!a) return;
   const html=`
     <div class="list">
-      <div class="row" onclick="closeSheet();setTimeout(()=>editarAcessorio('${id}'),300)"><div class="thumb">✏️</div><div class="info"><div class="t">Editar acessório</div></div></div>
+      ${podeEditar()?`<div class="row" onclick="closeSheet();setTimeout(()=>editarAcessorio('${id}'),300)"><div class="thumb">✏️</div><div class="info"><div class="t">Editar acessório</div></div></div>`:''}
       <div class="row" onclick="enviarOrcamentoAcess('${id}','whats')"><div class="thumb">📤</div><div class="info"><div class="t">Enviar orçamento (WhatsApp)</div></div></div>
       <div class="row" onclick="compartilharAcessFoto('${id}')"><div class="thumb">📷</div><div class="info"><div class="t">Compartilhar com foto</div></div></div>
       <div class="row" onclick="enviarOrcamentoAcess('${id}','copiar')"><div class="thumb">📋</div><div class="info"><div class="t">Copiar orçamento</div></div></div>
@@ -1330,6 +1342,7 @@ function enviarPedidoAcess(modo){
 function openNovoAcessorio(){ formAcessorio(null); }
 function editarAcessorio(id){ const a=(db.acessorios||[]).find(x=>x.id===id); formAcessorio(a); }
 function formAcessorio(a){
+  if(!podeEditar()){ toast('Só o administrador pode cadastrar/editar'); return; }
   tempFotosAcess = a ? (a.fotos||[]).slice() : [];
   const html=`
     ${fld('Nome do acessório','ac-nome',{ph:'ex: Capinha iPhone 13',val:a?a.nome:''})}
@@ -1406,7 +1419,7 @@ function updateVendaTotal(){
   const t=(p.venda||0)-(vendaCart.desconto||0);
   const e=el('venda-total'); if(e) e.textContent=money(t);
 }
-function resetVenda(){ vendaCart={cliente:null,produto:null,produtoId:null,desconto:0,pagamentos:[]}; carrinhoAcess=[]; }
+function resetVenda(){ vendaCart={cliente:null,produto:null,produtoId:null,desconto:0,pagamentos:[],obs:''}; carrinhoAcess=[]; }
 
 /* ============ CLIENTES ============ */
 function renderClientes(){
@@ -1580,6 +1593,7 @@ function pillPick(id,val,elm){
   elm.classList.add('active');
 }
 function openProduto(prod){
+  if(!podeEditar()){ toast('Só o administrador pode cadastrar/editar'); return; }
   tempFotos = prod? (prod.fotos||[]).slice() : [];
   const p=prod||{};
   const html=`
@@ -1766,11 +1780,12 @@ function openProdDetail(id){
     <button class="btn secondary" onclick="msgProntas('${p.id}')" style="margin-top:8px">💬 Mensagens prontas</button>
     <button class="btn secondary" onclick="copiarOrcamento('${p.id}')" style="margin-top:8px">Copiar orçamento</button>
     ${(p.status==='Disponível'||p.status==='Reservado')?`<button class="btn" onclick="venderEsse('${p.id}')" style="margin-top:8px">Vender este aparelho</button>`:''}
+    ${podeEditar()?`
     ${p.status==='Disponível'?`<button class="btn secondary" onclick="reservarProduto('${p.id}')" style="margin-top:8px">Reservar</button>`:''}
     ${p.status==='Reservado'?`<button class="btn secondary" onclick="liberarProduto('${p.id}')" style="margin-top:8px">Liberar reserva</button>`:''}
     ${p.status==='Vendido'?`<button class="btn secondary" onclick="liberarProduto('${p.id}')" style="margin-top:8px">Voltar ao estoque</button>`:''}
     <button class="btn secondary" onclick="editarProduto('${p.id}')" style="margin-top:8px">Editar</button>
-    <button class="btn danger" onclick="delProduto('${p.id}')" style="margin-top:8px">Remover aparelho</button>
+    <button class="btn danger" onclick="delProduto('${p.id}')" style="margin-top:8px">Remover aparelho</button>`:''}
     <div style="height:30px"></div>
   `;
   openSheet('Detalhes', html);
@@ -1902,6 +1917,7 @@ function mostrarTextoParaCopiar(texto){
     null,null);
 }
 function editarProduto(id){
+  if(!podeEditar()){ toast('Só o administrador pode editar'); return; }
   const p=db.produtos.find(x=>x.id===id);
   if(!p){ toast('Aparelho não encontrado'); return; }
   openProduto(p);
@@ -2243,6 +2259,7 @@ function finalizarVenda(total,falta){
     vendedor:session.nome,
     itens:itensVenda,
     tipo: ehAcessorio?'acessorio':'aparelho',
+    obs: vendaCart.obs||'',
     total, desconto:vendaCart.desconto||0,
     pagamentos:pagState.map(x=>({...x})),
     liquido: aReceber>0? liquido : liquido, // líquido do que entrou
@@ -2308,6 +2325,7 @@ function delVenda(id){
 /* ============ COMPRA ============ */
 let compraItens=[];
 function openCompra(){
+  if(!podeEditar()){ toast('Só o administrador'); return; }
   compraItens=[];
   drawCompra();
 }
@@ -2848,19 +2866,19 @@ function openMenu(){
     </div>
     <div class="sec-title">Ferramentas</div>
     <div class="list">
-      <div class="link-row" onclick="openCaixa('dia')">Fluxo de caixa (entradas e saídas) ${chev()}</div>
+      ${isAdmin?`<div class="link-row" onclick="openCaixa('dia')">Fluxo de caixa (entradas e saídas) ${chev()}</div>
       <div class="link-row" onclick="openFinanceiro('pagar')">Financeiro (contas a pagar e receber) ${chev()}</div>
       <div class="link-row" onclick="openCompra()">Registrar compra ${chev()}</div>
-      ${isAdmin?`<div class="link-row" onclick="openCondPag()">Condições de pagamento (orçamento) ${chev()}</div>
+      <div class="link-row" onclick="openCondPag()">Condições de pagamento (orçamento) ${chev()}</div>
       <div class="link-row" onclick="openUsuarios()">Usuários e acessos ${chev()}</div>
-      <div class="link-row" onclick="openLogins()">Histórico de acessos ${chev()}</div>`:''}
+      <div class="link-row" onclick="openLogins()">Histórico de acessos ${chev()}</div>`:`<div class="link-row" style="color:var(--text2)">Você está logado como vendedor</div>`}
     </div>
-    <div class="sec-title">Backup e segurança</div>
+    ${isAdmin?`<div class="sec-title">Backup e segurança</div>
     <div class="list">
       <div class="link-row" onclick="exportBackup()">Exportar backup ${chev()}</div>
       <div class="link-row" onclick="el('imp-input').click()">Importar backup ${chev()}</div>
-      ${isAdmin?`<div class="link-row" onclick="zerarSistema()" style="color:var(--red)">Zerar sistema (apagar tudo) ${chev()}</div>`:''}
-    </div>
+      <div class="link-row" onclick="zerarSistema()" style="color:var(--red)">Zerar sistema (apagar tudo) ${chev()}</div>
+    </div>`:''}
     <input type="file" id="imp-input" accept="application/json" style="display:none" onchange="importBackup(event)">
     <button class="btn secondary" onclick="logout()" style="margin-top:16px">Sair da conta</button>
     <div style="text-align:center;color:var(--text2);font-size:12px;margin-top:16px">Sistema de Gestão de Loja</div>
@@ -3070,6 +3088,6 @@ try{
 }catch(e){}
 
 </script>
-<div style="position:fixed;bottom:2px;right:4px;font-size:10px;color:#888;z-index:99999;pointer-events:none">v-troca-2026-ag</div>
+<div style="position:fixed;bottom:2px;right:4px;font-size:10px;color:#888;z-index:99999;pointer-events:none">v-troca-2026-ah</div>
 </body>
 </html>
