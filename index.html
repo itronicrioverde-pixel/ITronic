@@ -1186,7 +1186,7 @@ function renderItemAcess(a,isAdmin){
   const badgeCor = situacao==='Disponível'?'#34c759':(situacao==='Aguardando pedido'?'#ff9500':'#ff3b30');
   const badgeTxt = situacao==='Sem estoque'?'Sem estoque':(situacao==='Aguardando pedido'?'Aguardando pedido':(a.qtd<=0?'Esgotado':a.qtd+' em estoque'));
   return `<div class="row">
-    <div class="thumb">${a.fotos&&a.fotos[0]?`<img src="${a.fotos[0]}">`:'🎧'}</div>
+    <div class="thumb" style="${a.fotos&&a.fotos[0]?'padding:5px;background:#fff;border:1px solid var(--line)':''}">${a.fotos&&a.fotos[0]?`<img src="${a.fotos[0]}" style="width:100%;height:100%;object-fit:contain">`:'🎧'}</div>
     <div class="info" onclick="acaoAcessorio('${a.id}')"><div class="t">${a.nome}</div><div class="s"><span style="color:${badgeCor};font-weight:600">${badgeTxt}</span>${a.sub?' · '+a.sub:''}${isAdmin&&a.custo?' · custo '+money(a.custo):''}</div></div>
     <div class="right" style="display:flex;align-items:center;gap:8px">
       <div class="p money-in">${money(a.venda)}</div>
@@ -1217,7 +1217,7 @@ function renderCarrinhoAcess(isAdmin){
     return `
     <div class="list" style="margin-bottom:${aberta?'0':'12px'}">
       <div class="row" onclick="toggleCatAcess('${cat.replace(/'/g,"\\'")}')" style="cursor:pointer">
-        <div class="thumb">${thumb}</div>
+        <div class="thumb" style="padding:6px;background:#fff;border:1px solid var(--line)">${primeiraFoto?`<img src="${primeiraFoto.fotos[0]}" style="width:100%;height:100%;object-fit:contain">`:'<span style="font-size:22px">🎧</span>'}</div>
         <div class="info"><div class="t">${cat}</div><div class="s">${qtdCat} ${qtdCat===1?'item':'itens'}${noCarrinhoCat>0?` · <span style="color:var(--blue);font-weight:600">${noCarrinhoCat} no carrinho</span>`:''}</div></div>
         <div class="right" style="font-size:20px;color:var(--text2);transform:rotate(${aberta?'90':'0'}deg);transition:transform .2s">›</div>
       </div>
