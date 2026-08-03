@@ -1170,7 +1170,7 @@ function renderCarrinhoAcess(isAdmin){
         const noCarrinho=carrinhoAcess.find(x=>x.id===a.id);
         const semEstoque=a.qtd<=0;
         return `<div class="row">
-          <div class="thumb">🎧</div>
+          <div class="thumb">${a.fotos&&a.fotos[0]?`<img src="${a.fotos[0]}">`:'🎧'}</div>
           <div class="info" onclick="acaoAcessorio('${a.id}')"><div class="t">${a.nome}</div><div class="s">${a.sub||''} · ${a.qtd} em estoque${isAdmin&&a.custo?' · custo '+money(a.custo):''}</div></div>
           <div class="right" style="display:flex;align-items:center;gap:8px">
             <div class="p money-in">${money(a.venda)}</div>
@@ -2979,6 +2979,6 @@ try{
 }catch(e){}
 
 </script>
-<div style="position:fixed;bottom:2px;right:4px;font-size:10px;color:#888;z-index:99999;pointer-events:none">v-troca-2026-ab</div>
+<div style="position:fixed;bottom:2px;right:4px;font-size:10px;color:#888;z-index:99999;pointer-events:none">v-troca-2026-ac</div>
 </body>
 </html>
