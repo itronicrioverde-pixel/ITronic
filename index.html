@@ -1212,12 +1212,17 @@ function renderCarrinhoAcess(isAdmin){
     const aberta=!!catsAbertas[cat];
     const qtdCat=grupos[cat].length;
     const noCarrinhoCat=grupos[cat].reduce((s,a)=>{const it=carrinhoAcess.find(x=>x.id===a.id);return s+(it?it.qtd:0);},0);
+    const primeiraFoto=grupos[cat].find(a=>a.fotos&&a.fotos[0]);
+    const thumb=primeiraFoto?`<img src="${primeiraFoto.fotos[0]}">`:'🎧';
     return `
-    <div class="row" onclick="toggleCatAcess('${cat.replace(/'/g,"\\'")}')" style="cursor:pointer;background:var(--bg2)">
-      <div class="info"><div class="t">${cat} <span style="color:var(--text2);font-weight:400">(${qtdCat})</span></div>${noCarrinhoCat>0?`<div class="s" style="color:var(--blue)">${noCarrinhoCat} no carrinho</div>`:''}</div>
-      <div class="right" style="font-size:18px;color:var(--text2);transform:rotate(${aberta?'90':'0'}deg);transition:transform .2s">›</div>
+    <div class="list" style="margin-bottom:${aberta?'0':'12px'}">
+      <div class="row" onclick="toggleCatAcess('${cat.replace(/'/g,"\\'")}')" style="cursor:pointer">
+        <div class="thumb">${thumb}</div>
+        <div class="info"><div class="t">${cat}</div><div class="s">${qtdCat} ${qtdCat===1?'item':'itens'}${noCarrinhoCat>0?` · <span style="color:var(--blue);font-weight:600">${noCarrinhoCat} no carrinho</span>`:''}</div></div>
+        <div class="right" style="font-size:20px;color:var(--text2);transform:rotate(${aberta?'90':'0'}deg);transition:transform .2s">›</div>
+      </div>
     </div>
-    ${aberta?`<div class="list">${grupos[cat].map(a=>renderItemAcess(a,isAdmin)).join('')}</div>`:''}
+    ${aberta?`<div class="list" style="margin-top:-4px;margin-bottom:12px;margin-left:12px">${grupos[cat].map(a=>renderItemAcess(a,isAdmin)).join('')}</div>`:''}
   `;}).join('') : `<div class="empty">Nenhum acessório cadastrado.${podeEditar()?' Toque em "+ Cadastrar".':''}</div>`;
   return `
     <div style="display:flex;justify-content:space-between;align-items:center;margin:16px 0 8px">
