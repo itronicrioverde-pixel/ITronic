@@ -1178,38 +1178,45 @@ function renderVenda(){
   `;
 }
 
+function renderItemAcess(a,isAdmin){
+  const noCarrinho=carrinhoAcess.find(x=>x.id===a.id);
+  const situacao=a.situacao||'Disponível';
+  const vendavel = situacao==='Disponível' && a.qtd>0;
+  const badgeCor = situacao==='Disponível'?'#34c759':(situacao==='Aguardando pedido'?'#ff9500':'#ff3b30');
+  const badgeTxt = situacao==='Sem estoque'?'Sem estoque':(situacao==='Aguardando pedido'?'Aguardando pedido':(a.qtd<=0?'Esgotado':a.qtd+' em estoque'));
+  return `<div class="row">
+    <div class="thumb">${a.fotos&&a.fotos[0]?`<img src="${a.fotos[0]}">`:'🎧'}</div>
+    <div class="info" onclick="acaoAcessorio('${a.id}')"><div class="t">${a.nome}</div><div class="s"><span style="color:${badgeCor};font-weight:600">${badgeTxt}</span>${a.sub?' · '+a.sub:''}${isAdmin&&a.custo?' · custo '+money(a.custo):''}</div></div>
+    <div class="right" style="display:flex;align-items:center;gap:8px">
+      <div class="p money-in">${money(a.venda)}</div>
+      ${!vendavel?``:
+        noCarrinho?`<div style="display:flex;align-items:center;gap:6px">
+          <button onclick="mudarQtdAcess('${a.id}',-1)" style="width:28px;height:28px;border-radius:8px;background:var(--bg2);font-size:18px">−</button>
+          <span style="min-width:20px;text-align:center;font-weight:600">${noCarrinho.qtd}</span>
+          <button onclick="mudarQtdAcess('${a.id}',1)" style="width:28px;height:28px;border-radius:8px;background:var(--bg2);font-size:18px">+</button>
+        </div>`:
+        `<button onclick="mudarQtdAcess('${a.id}',1)" style="width:32px;height:32px;border-radius:8px;background:var(--blue);color:#fff;font-size:20px">+</button>`}
+    </div>
+  </div>`;
+}
 function renderCarrinhoAcess(isAdmin){
   const acess=db.acessorios||[];
   const totalCarrinho=carrinhoAcess.reduce((s,it)=>{const a=acess.find(x=>x.id===it.id);return s+(a?(Number(a.venda)||0)*it.qtd:0);},0);
   const qtdCarrinho=carrinhoAcess.reduce((s,it)=>s+it.qtd,0);
+  // agrupa por categoria
+  const grupos={};
+  acess.forEach(a=>{ const cat=a.categoria||'Outros'; if(!grupos[cat]) grupos[cat]=[]; grupos[cat].push(a); });
+  const nomesCats=Object.keys(grupos).sort((x,y)=> x==='Outros'?1 : y==='Outros'?-1 : x.localeCompare(y));
+  const listaAgrupada = acess.length ? nomesCats.map(cat=>`
+    <div class="sec-title" style="margin-top:16px">${cat}</div>
+    <div class="list">${grupos[cat].map(a=>renderItemAcess(a,isAdmin)).join('')}</div>
+  `).join('') : `<div class="empty">Nenhum acessório cadastrado.${podeEditar()?' Toque em "+ Cadastrar".':''}</div>`;
   return `
     <div style="display:flex;justify-content:space-between;align-items:center;margin:16px 0 8px">
       <div class="sec-title" style="margin:0">Acessórios disponíveis</div>
       ${podeEditar()?`<button class="btn secondary" style="width:auto;padding:6px 12px;font-size:13px" onclick="openNovoAcessorio()">+ Cadastrar</button>`:''}
     </div>
-    ${acess.length?`<div class="list">
-      ${acess.map(a=>{
-        const noCarrinho=carrinhoAcess.find(x=>x.id===a.id);
-        const situacao=a.situacao||'Disponível';
-        const vendavel = situacao==='Disponível' && a.qtd>0;
-        const badgeCor = situacao==='Disponível'?'#34c759':(situacao==='Aguardando pedido'?'#ff9500':'#ff3b30');
-        const badgeTxt = situacao==='Sem estoque'?'Sem estoque':(situacao==='Aguardando pedido'?'Aguardando pedido':(a.qtd<=0?'Esgotado':a.qtd+' em estoque'));
-        return `<div class="row">
-          <div class="thumb">${a.fotos&&a.fotos[0]?`<img src="${a.fotos[0]}">`:'🎧'}</div>
-          <div class="info" onclick="acaoAcessorio('${a.id}')"><div class="t">${a.nome}</div><div class="s"><span style="color:${badgeCor};font-weight:600">${badgeTxt}</span>${a.sub?' · '+a.sub:''}${isAdmin&&a.custo?' · custo '+money(a.custo):''}</div></div>
-          <div class="right" style="display:flex;align-items:center;gap:8px">
-            <div class="p money-in">${money(a.venda)}</div>
-            ${!vendavel?`${a.qtd>0&&situacao==='Disponível'?'':''}`:
-              noCarrinho?`<div style="display:flex;align-items:center;gap:6px">
-                <button onclick="mudarQtdAcess('${a.id}',-1)" style="width:28px;height:28px;border-radius:8px;background:var(--bg2);font-size:18px">−</button>
-                <span style="min-width:20px;text-align:center;font-weight:600">${noCarrinho.qtd}</span>
-                <button onclick="mudarQtdAcess('${a.id}',1)" style="width:28px;height:28px;border-radius:8px;background:var(--bg2);font-size:18px">+</button>
-              </div>`:
-              `<button onclick="mudarQtdAcess('${a.id}',1)" style="width:32px;height:32px;border-radius:8px;background:var(--blue);color:#fff;font-size:20px">+</button>`}
-          </div>
-        </div>`;
-      }).join('')}
-    </div>`:`<div class="empty">Nenhum acessório cadastrado. Toque em "+ Cadastrar".</div>`}
+    ${listaAgrupada}
 
     ${qtdCarrinho>0?`
       <div class="card" style="margin-top:14px">
@@ -1344,8 +1351,18 @@ function editarAcessorio(id){ const a=(db.acessorios||[]).find(x=>x.id===id); fo
 function formAcessorio(a){
   if(!podeEditar()){ toast('Só o administrador pode cadastrar/editar'); return; }
   tempFotosAcess = a ? (a.fotos||[]).slice() : [];
+  // categorias já usadas nos acessórios
+  const catsUsadas=[...new Set((db.acessorios||[]).map(x=>x.categoria).filter(Boolean))];
+  const catAtual=a?a.categoria:'';
+  const optCats=['<option value="">— sem categoria —</option>']
+    .concat(catsUsadas.map(cc=>`<option value="${cc}" ${cc===catAtual?'selected':''}>${cc}</option>`))
+    .concat(['<option value="__nova__">+ Nova categoria...</option>']).join('');
   const html=`
     ${fld('Nome do acessório','ac-nome',{ph:'ex: Capinha iPhone 13',val:a?a.nome:''})}
+    <div class="field"><label>Categoria</label>
+      <select class="input" id="ac-cat" onchange="if(this.value==='__nova__'){el('ac-cat-nova').style.display='block';el('ac-cat-nova').focus();}else{el('ac-cat-nova').style.display='none';}">${optCats}</select>
+      <input class="input" id="ac-cat-nova" placeholder="Digite a nova categoria (ex: Fontes, Cabos)" style="display:none;margin-top:8px" value="${catAtual&&!catsUsadas.includes(catAtual)?catAtual:''}">
+    </div>
     ${selFld('Tipo','ac-sub',['Original','Premium'],a?a.sub:'Original')}
     ${selFld('Situação','ac-sit',['Disponível','Aguardando pedido','Sem estoque'],a?(a.situacao||'Disponível'):'Disponível')}
     ${fld('Fornecedor (de onde veio)','ac-forn',{ph:'ex: Distribuidora X',val:a?a.fornecedor:''})}
@@ -1362,8 +1379,12 @@ function formAcessorio(a){
   openSheet(a?'Editar acessório':'Novo acessório', html, 'Salvar', ()=>{
     const nome=getV('ac-nome').trim();
     if(!nome){ toast('Informe o nome'); return; }
+    let categoria=getV('ac-cat');
+    if(categoria==='__nova__') categoria=getV('ac-cat-nova').trim();
+    else if(el('ac-cat-nova')&&el('ac-cat-nova').value.trim()&&categoria==='') categoria=getV('ac-cat-nova').trim();
     const dados={
       nome, sub:getV('ac-sub'),
+      categoria,
       situacao:getV('ac-sit'),
       fornecedor:getV('ac-forn').trim(),
       serie:getV('ac-serie').trim(),
@@ -2450,7 +2471,7 @@ function renderSimuladorInline(){
 
     <div class="card" style="margin-top:16px" id="sim-out"></div>
     <button class="btn" onclick="copiarSimTroca()" style="margin-top:12px;background:#25D366">📤 Copiar orçamento pro WhatsApp</button>
-    <button class="btn secondary" onclick="openTaxasCartao()" style="margin-top:8px">⚙️ Ajustar taxas do cartão</button>
+    ${podeEditar()?`<button class="btn secondary" onclick="openTaxasCartao()" style="margin-top:8px">⚙️ Ajustar taxas do cartão</button>`:''}
     <div style="height:20px"></div>
   `;
 }
@@ -2510,6 +2531,7 @@ function copiarSimTroca(){
   else copiarFallback(texto,ok);
 }
 function openTaxasCartao(){
+  if(!podeEditar()){ toast('Só o administrador ajusta as taxas'); return; }
   const tx=db.taxasCartao||{debito:1.5,credito:[]};
   const linhas=Array.from({length:21},(_,i)=>`
     <div style="display:flex;align-items:center;gap:10px;margin:4px 0">
@@ -3088,6 +3110,5 @@ try{
 }catch(e){}
 
 </script>
-<div style="position:fixed;bottom:2px;right:4px;font-size:10px;color:#888;z-index:99999;pointer-events:none">v-troca-2026-ah</div>
 </body>
 </html>
