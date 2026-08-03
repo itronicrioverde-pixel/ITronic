@@ -1168,13 +1168,16 @@ function renderCarrinhoAcess(isAdmin){
     ${acess.length?`<div class="list">
       ${acess.map(a=>{
         const noCarrinho=carrinhoAcess.find(x=>x.id===a.id);
-        const semEstoque=a.qtd<=0;
+        const situacao=a.situacao||'Disponível';
+        const vendavel = situacao==='Disponível' && a.qtd>0;
+        const badgeCor = situacao==='Disponível'?'#34c759':(situacao==='Aguardando pedido'?'#ff9500':'#ff3b30');
+        const badgeTxt = situacao==='Sem estoque'?'Sem estoque':(situacao==='Aguardando pedido'?'Aguardando pedido':(a.qtd<=0?'Esgotado':a.qtd+' em estoque'));
         return `<div class="row">
           <div class="thumb">${a.fotos&&a.fotos[0]?`<img src="${a.fotos[0]}">`:'🎧'}</div>
-          <div class="info" onclick="acaoAcessorio('${a.id}')"><div class="t">${a.nome}</div><div class="s">${a.sub||''} · ${a.qtd} em estoque${isAdmin&&a.custo?' · custo '+money(a.custo):''}</div></div>
+          <div class="info" onclick="acaoAcessorio('${a.id}')"><div class="t">${a.nome}</div><div class="s"><span style="color:${badgeCor};font-weight:600">${badgeTxt}</span>${a.sub?' · '+a.sub:''}${isAdmin&&a.custo?' · custo '+money(a.custo):''}</div></div>
           <div class="right" style="display:flex;align-items:center;gap:8px">
             <div class="p money-in">${money(a.venda)}</div>
-            ${semEstoque?`<span style="font-size:12px;color:var(--red)">esgotado</span>`:
+            ${!vendavel?`<span style="font-size:12px;color:${badgeCor};max-width:80px;text-align:right">${situacao==='Disponível'?'esgotado':situacao}</span>`:
               noCarrinho?`<div style="display:flex;align-items:center;gap:6px">
                 <button onclick="mudarQtdAcess('${a.id}',-1)" style="width:28px;height:28px;border-radius:8px;background:var(--bg2);font-size:18px">−</button>
                 <span style="min-width:20px;text-align:center;font-weight:600">${noCarrinho.qtd}</span>
@@ -1202,6 +1205,7 @@ function renderCarrinhoAcess(isAdmin){
 function mudarQtdAcess(id,delta){
   const a=(db.acessorios||[]).find(x=>x.id===id);
   if(!a) return;
+  if(delta>0 && (a.situacao&&a.situacao!=='Disponível')){ toast('Acessório '+a.situacao.toLowerCase()); return; }
   let item=carrinhoAcess.find(x=>x.id===id);
   if(!item){ if(delta>0){ carrinhoAcess.push({id,qtd:1}); } }
   else{
@@ -1320,6 +1324,7 @@ function formAcessorio(a){
   const html=`
     ${fld('Nome do acessório','ac-nome',{ph:'ex: Capinha iPhone 13',val:a?a.nome:''})}
     ${selFld('Tipo','ac-sub',['Original','Premium'],a?a.sub:'Original')}
+    ${selFld('Situação','ac-sit',['Disponível','Aguardando pedido','Sem estoque'],a?(a.situacao||'Disponível'):'Disponível')}
     ${fld('Fornecedor (de onde veio)','ac-forn',{ph:'ex: Distribuidora X',val:a?a.fornecedor:''})}
     ${fld('Número de série (opcional)','ac-serie',{ph:'deixe vazio se for item de quantidade',val:a?a.serie:''})}
     ${fld('Preço de venda','ac-venda',{ph:'0,00',val:a?a.venda:''})}
@@ -1336,6 +1341,7 @@ function formAcessorio(a){
     if(!nome){ toast('Informe o nome'); return; }
     const dados={
       nome, sub:getV('ac-sub'),
+      situacao:getV('ac-sit'),
       fornecedor:getV('ac-forn').trim(),
       serie:getV('ac-serie').trim(),
       venda:parseFloat(String(getV('ac-venda')).replace(',','.'))||0,
@@ -2235,7 +2241,7 @@ function finalizarVenda(total,falta){
   db.vendas.push(venda);
   if(ehAcessorio){
     // baixa a quantidade de cada acessório vendido
-    carrinhoAcess.forEach(it=>{ const a=(db.acessorios||[]).find(x=>x.id===it.id); if(a){ a.qtd=Math.max(0,(Number(a.qtd)||0)-it.qtd); } });
+    carrinhoAcess.forEach(it=>{ const a=(db.acessorios||[]).find(x=>x.id===it.id); if(a){ a.qtd=Math.max(0,(Number(a.qtd)||0)-it.qtd); if(a.qtd<=0 && (!a.situacao||a.situacao==='Disponível')) a.situacao='Sem estoque'; } });
   }else{
     // marca produto como vendido
     p.status='Vendido';
@@ -2979,6 +2985,6 @@ try{
 }catch(e){}
 
 </script>
-<div style="position:fixed;bottom:2px;right:4px;font-size:10px;color:#888;z-index:99999;pointer-events:none">v-troca-2026-ac</div>
+<div style="position:fixed;bottom:2px;right:4px;font-size:10px;color:#888;z-index:99999;pointer-events:none">v-troca-2026-ad</div>
 </body>
 </html>
