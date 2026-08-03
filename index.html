@@ -453,8 +453,10 @@ let filterEstoque='todos', searchEstoque='';
 let relMesSelecionado=null; // mês escolhido nos relatórios (null = mês atual)
 let painelMes='todos'; // mês escolhido no painel ('todos' = geral)
 let vendaCart={cliente:null, produto:null, produtoId:null, desconto:0, pagamentos:[]};
-let vendaModo='aparelho'; // 'aparelho' ou 'acessorio'
+let vendaModo='aparelho'; // 'aparelho', 'acessorio' ou 'simulador'
 let carrinhoAcess=[]; // itens de acessório no carrinho: {id, qtd}
+const MODELOS_IPHONE=['iPhone 14','iPhone 14 Plus','iPhone 14 Pro','iPhone 14 Pro Max','iPhone 15','iPhone 15 Plus','iPhone 15 Pro','iPhone 15 Pro Max','iPhone 16','iPhone 16 Plus','iPhone 16 Pro','iPhone 16 Pro Max','iPhone 16e','iPhone 17','iPhone 17 Pro','iPhone 17 Pro Max','iPhone 17e'];
+let simState={parcCred:1};
 
 const CATS = ['iPhone','iPad','Apple Watch','MacBook','AirPods','Acessório'];
 const CAT_ICON = {'iPhone':'📱','iPad':'📲','Apple Watch':'⌚️','MacBook':'💻','AirPods':'🎧','Acessório':'🔌'};
@@ -1110,6 +1112,7 @@ function renderVenda(){
     <div style="display:flex;gap:8px;margin-bottom:14px">
       <button class="btn ${vendaModo==='aparelho'?'':'secondary'}" style="flex:1" onclick="vendaModo='aparelho';renderVenda()">📱 Aparelho</button>
       <button class="btn ${vendaModo==='acessorio'?'':'secondary'}" style="flex:1" onclick="vendaModo='acessorio';renderVenda()">🎧 Acessórios</button>
+      <button class="btn ${vendaModo==='simulador'?'':'secondary'}" style="flex:1" onclick="vendaModo='simulador';renderVenda()">🧮 Simular</button>
     </div>`;
 
   const blocoCliente=`
@@ -1125,6 +1128,12 @@ function renderVenda(){
 
   if(vendaModo==='acessorio'){
     el('page-venda').innerHTML = toggle + blocoCliente + renderCarrinhoAcess(isAdmin);
+    return;
+  }
+
+  if(vendaModo==='simulador'){
+    el('page-venda').innerHTML = toggle + renderSimuladorInline();
+    setTimeout(calcSimTroca,50);
     return;
   }
 
@@ -2399,11 +2408,11 @@ function salvarCompra(){
 }
 
 /* ============ SIMULADOR ============ */
-const MODELOS_IPHONE=['iPhone 14','iPhone 14 Plus','iPhone 14 Pro','iPhone 14 Pro Max','iPhone 15','iPhone 15 Plus','iPhone 15 Pro','iPhone 15 Pro Max','iPhone 16','iPhone 16 Plus','iPhone 16 Pro','iPhone 16 Pro Max','iPhone 16e','iPhone 17','iPhone 17 Plus','iPhone 17 Pro','iPhone 17 Pro Max'];
-let simState={parcCred:1};
-function openSimulador(){
+function openSimulador(){ closeSheet(); vendaModo='simulador'; go('venda'); }
+function renderSimuladorInline(){
   const opt=(sel)=>MODELOS_IPHONE.map(m=>`<option value="${m}" ${m===sel?'selected':''}>${m}</option>`).join('');
-  const html=`
+  return `
+    <div class="sec-title">Simulador de troca</div>
     <div class="mini-lbl">iPhone novo (que o cliente leva)</div>
     <select class="input" id="sim-mod-novo">${opt('iPhone 15')}</select>
     <input class="input" id="sim-val-novo" type="text" inputmode="decimal" placeholder="Valor do novo (R$)" oninput="calcSimTroca()" style="margin-top:8px">
@@ -2424,9 +2433,8 @@ function openSimulador(){
     <div class="card" style="margin-top:16px" id="sim-out"></div>
     <button class="btn" onclick="copiarSimTroca()" style="margin-top:12px;background:#25D366">📤 Copiar orçamento pro WhatsApp</button>
     <button class="btn secondary" onclick="openTaxasCartao()" style="margin-top:8px">⚙️ Ajustar taxas do cartão</button>
+    <div style="height:20px"></div>
   `;
-  openSheet('Simulador de troca', html);
-  calcSimTroca();
 }
 function calcSimTroca(){
   const vNovo=parseFloat(String(getV('sim-val-novo')).replace(',','.'))||0;
@@ -2843,7 +2851,6 @@ function openMenu(){
       <div class="link-row" onclick="openCaixa('dia')">Fluxo de caixa (entradas e saídas) ${chev()}</div>
       <div class="link-row" onclick="openFinanceiro('pagar')">Financeiro (contas a pagar e receber) ${chev()}</div>
       <div class="link-row" onclick="openCompra()">Registrar compra ${chev()}</div>
-      <div class="link-row" onclick="openSimulador()">Simulador de troca ${chev()}</div>
       ${isAdmin?`<div class="link-row" onclick="openCondPag()">Condições de pagamento (orçamento) ${chev()}</div>
       <div class="link-row" onclick="openUsuarios()">Usuários e acessos ${chev()}</div>
       <div class="link-row" onclick="openLogins()">Histórico de acessos ${chev()}</div>`:''}
@@ -3063,6 +3070,6 @@ try{
 }catch(e){}
 
 </script>
-<div style="position:fixed;bottom:2px;right:4px;font-size:10px;color:#888;z-index:99999;pointer-events:none">v-troca-2026-ae</div>
+<div style="position:fixed;bottom:2px;right:4px;font-size:10px;color:#888;z-index:99999;pointer-events:none">v-troca-2026-ag</div>
 </body>
 </html>
