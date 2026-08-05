@@ -21,14 +21,17 @@ const firebaseConfig = {
   messagingSenderId: "1064607614334",
   appId: "1:1064607614334:web:5075349dbb3c2541161f2f"
 };
-let fbReady=false, fbDoc=null;
+let fbReady=false, fbDoc=null, fbFotos=null, fs=null;
 try{
   firebase.initializeApp(firebaseConfig);
-  const fs=firebase.firestore();
+  fs=firebase.firestore();
   try{ fs.enablePersistence({synchronizeTabs:true}).catch(()=>{}); }catch(e){}
   fbDoc = fs.collection('itronic').doc('dados');
+  fbFotos = fs.collection('fotos'); // cada foto num documento próprio
   fbReady=true;
 }catch(e){ fbReady=false; }
+// cache local das fotos já buscadas: { idFoto: dataURL }
+window.fotoCache = window.fotoCache || {};
 </script>
 <style>
 :root{
@@ -542,6 +545,7 @@ function loadDB(){
             reconciliarVendidos();
             localStorage.setItem(DB_KEY, JSON.stringify(db));
             dbLoaded=true;
+            precarregarFotos();
             // Não redesenha se o usuário está digitando (campo focado) ou fechando uma venda,
             // pra não apagar o que ele está fazendo. Nesses casos, agenda pra depois.
             if(session && typeof currentTab!=='undefined'){
@@ -1002,7 +1006,7 @@ function abrirCatalogo(){
     <div class="list">
       ${disp.map(p=>{
         const marcado=catalogoSel.includes(p.id);
-        const thumb=p.fotos&&p.fotos[0]?`<img src="${p.fotos[0]}">`:(CAT_ICON[p.cat]||'📦');
+        const thumb=temFoto(p.fotos&&p.fotos[0])?`<img src="${imgFoto(p.fotos[0])}">`:(CAT_ICON[p.cat]||'📦');
         return `<div class="row" onclick="toggleCatItem('${p.id}')">
           <div class="thumb">${thumb}</div>
           <div class="info"><div class="t">${p.marca||''} ${p.modelo||''}</div><div class="s">${[p.cor,p.armazenamento,p.condicao].filter(Boolean).join(' · ')}</div></div>
@@ -1142,7 +1146,7 @@ function renderEstoqueAgrupado(lista){
 }
 function prodRow(p){
   const b = p.status==='Disponível'?'disp':p.status==='Reservado'?'res':'vend';
-  const thumb = p.fotos&&p.fotos[0]? `<img src="${p.fotos[0]}">` : CAT_ICON[p.cat]||'📦';
+  const thumb = temFoto(p.fotos&&p.fotos[0])? `<img src="${imgFoto(p.fotos[0])}">` : CAT_ICON[p.cat]||'📦';
   return `<div class="row" onclick="openProdDetail('${p.id}')">
     <div class="thumb">${thumb}</div>
     <div class="info">
@@ -1194,7 +1198,7 @@ function renderVenda(){
     <div class="sec-title">Aparelho</div>
     <div class="list">
       <div class="row" onclick="pickProduto()">
-        <div class="thumb">${c.produto?(c.produto.fotos&&c.produto.fotos[0]?`<img src="${c.produto.fotos[0]}">`:(CAT_ICON[c.produto.cat]||'📦')):'📱'}</div>
+        <div class="thumb">${c.produto?(temFoto(c.produto.fotos&&c.produto.fotos[0])?`<img src="${imgFoto(c.produto.fotos[0])}">`:(CAT_ICON[c.produto.cat]||'📦')):'📱'}</div>
         <div class="info"><div class="t">${c.produto?(c.produto.marca+' '+c.produto.modelo):'Selecionar aparelho'}</div>
         <div class="s">${c.produto?[c.produto.cor,c.produto.armazenamento].filter(Boolean).join(' · '):(disp.length+' disponíveis')}</div></div>
         <div class="right">${c.produto?`<div class="p money-in">${money(c.produto.venda)}</div>`:''}${chev()}</div>
@@ -1234,7 +1238,7 @@ function renderItemAcess(a,isAdmin){
   const badgeCor = situacao==='Disponível'?'#34c759':(situacao==='Aguardando pedido'?'#ff9500':'#ff3b30');
   const badgeTxt = situacao==='Sem estoque'?'Sem estoque':(situacao==='Aguardando pedido'?'Aguardando pedido':(a.qtd<=0?'Esgotado':a.qtd+' em estoque'));
   return `<div class="row">
-    <div class="thumb" style="${a.fotos&&a.fotos[0]?'padding:5px;background:#fff;border:1px solid var(--line)':''}">${a.fotos&&a.fotos[0]?`<img src="${a.fotos[0]}" style="width:100%;height:100%;object-fit:contain">`:'🎧'}</div>
+    <div class="thumb" style="${temFoto(a.fotos&&a.fotos[0])?'padding:5px;background:#fff;border:1px solid var(--line)':''}">${temFoto(a.fotos&&a.fotos[0])?`<img src="${imgFoto(a.fotos[0])}" style="width:100%;height:100%;object-fit:contain">`:'🎧'}</div>
     <div class="info" onclick="acaoAcessorio('${a.id}')"><div class="t">${a.nome}</div><div class="s"><span style="color:${badgeCor};font-weight:600">${badgeTxt}</span>${a.sub?' · '+a.sub:''}${isAdmin&&a.custo?' · custo '+money(a.custo):''}</div></div>
     <div class="right" style="display:flex;align-items:center;gap:8px">
       <div class="p money-in">${money(a.venda)}</div>
@@ -1264,7 +1268,7 @@ function renderCarrinhoAcess(isAdmin){
     return `
     <div class="list" style="margin-bottom:10px">
       <div class="row" onclick="toggleCatAcess('${cat.replace(/'/g,"\\'")}')" style="cursor:pointer;border-bottom:${aberta?'.5px solid var(--line)':'none'}">
-        <div class="thumb" style="${primeiraFoto?'padding:5px;background:#fff;border:1px solid var(--line)':''}">${primeiraFoto?`<img src="${primeiraFoto.fotos[0]}" style="width:100%;height:100%;object-fit:contain">`:'🎧'}</div>
+        <div class="thumb" style="${primeiraFoto?'padding:5px;background:#fff;border:1px solid var(--line)':''}">${primeiraFoto?`<img src="${imgFoto(primeiraFoto.fotos[0])}" style="width:100%;height:100%;object-fit:contain">`:'🎧'}</div>
         <div class="info"><div class="t">${cat}</div><div class="s">${qtdCat} ${qtdCat===1?'item':'itens'}${noCarrinhoCat>0?` · <span style="color:var(--blue);font-weight:600">${noCarrinhoCat} no carrinho</span>`:''}</div></div>
         <div class="right" style="font-size:20px;color:var(--text2);transform:rotate(${aberta?'90':'0'}deg);transition:transform .2s">›</div>
       </div>
@@ -1365,7 +1369,7 @@ async function compartilharAcessFoto(id){
   const a=(db.acessorios||[]).find(x=>x.id===id);
   if(!a) return;
   const texto=textoAcessorio(a);
-  const foto=a.fotos&&a.fotos[0];
+  const foto=await new Promise(r=>resolverFoto(a.fotos&&a.fotos[0], r));
   try{
     if(foto && navigator.canShare){
       const resp=await fetch(foto); const blob=await resp.blob();
@@ -1457,9 +1461,12 @@ function formAcessorio(a){
       qtd:parseInt(getV('ac-qtd'))||0,
       fotos:tempFotosAcess.slice()
     };
-    if(a){ Object.assign(a,dados); toast('Acessório atualizado'); }
-    else { dados.id=uid(); dados.entrada=todayStr(); db.acessorios.push(dados); toast('Acessório cadastrado'); }
-    saveDB(); closeSheet(); renderVenda();
+    converterFotosParaRefs(dados.fotos, (refs)=>{
+      dados.fotos=refs;
+      if(a){ Object.assign(a,dados); toast('Acessório atualizado'); }
+      else { dados.id=uid(); dados.entrada=todayStr(); db.acessorios.push(dados); toast('Acessório cadastrado'); }
+      saveDB(); closeSheet(); renderVenda();
+    });
   });
   setTimeout(renderFotosAcess,60);
   if(a){
@@ -1725,6 +1732,71 @@ function renderFotos(){
   g.innerHTML = tempFotos.map((f,i)=>`<div class="photo-wrap"><img class="ph" src="${f}"><div class="del" onclick="tempFotos.splice(${i},1);renderFotos()">×</div></div>`).join('')
     + `<div class="photo-add" onclick="el('foto-input').click()"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg></div>`;
 }
+// ===== FOTOS SEPARADAS (referências) =====
+// Uma foto pode estar salva de 2 jeitos:
+//  - "data:image/..." = imagem embutida (jeito antigo)
+//  - "ref:xxxxx"       = id de um documento na coleção 'fotos' (jeito novo, leve)
+function imgFoto(f){
+  // retorna o src pronto para <img>; se for referência, pega do cache (ou vazio até carregar)
+  if(!f) return '';
+  if(ehRefFoto(f)) return window.fotoCache[idDaRef(f)]||'';
+  return f;
+}
+function temFoto(f){ return !!f && (!ehRefFoto(f) || !!window.fotoCache[idDaRef(f)]); }
+function ehRefFoto(f){ return typeof f==='string' && f.indexOf('ref:')===0; }
+function idDaRef(f){ return f.slice(4); }
+
+function converterFotosParaRefs(fotos, cb){
+  // recebe lista com dataURLs e/ou refs; salva as dataURLs novas na coleção e devolve lista de refs
+  const lista=(fotos||[]).slice();
+  if(!lista.length){ cb([]); return; }
+  const resultado=new Array(lista.length);
+  let pendentes=lista.length;
+  lista.forEach((f,i)=>{
+    if(ehRefFoto(f)){ resultado[i]=f; if(--pendentes===0) cb(resultado); return; }
+    // é dataURL nova: salva separada
+    salvarFotoSeparada(f, (ref)=>{ resultado[i]=ref; if(--pendentes===0) cb(resultado); });
+  });
+}
+function salvarFotoSeparada(dataUrl, cb){
+  // sobe a imagem para a coleção 'fotos' e retorna "ref:id"
+  if(!fbReady || !fbFotos){ cb(dataUrl); return; } // sem nuvem: mantém embutida
+  const id = 'f'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+  window.fotoCache[id]=dataUrl; // já deixa no cache local
+  fbFotos.doc(id).set({ img:dataUrl, criado:Date.now() })
+    .then(()=>cb('ref:'+id))
+    .catch(()=>cb(dataUrl)); // se falhar, guarda embutida como antes
+}
+
+function resolverFoto(f, cb){
+  // devolve o dataURL de uma foto, seja embutida ou referência
+  if(!f){ cb(null); return; }
+  if(!ehRefFoto(f)){ cb(f); return; } // já é imagem embutida
+  const id=idDaRef(f);
+  if(window.fotoCache[id]){ cb(window.fotoCache[id]); return; } // no cache
+  if(!fbReady || !fbFotos){ cb(null); return; }
+  fbFotos.doc(id).get()
+    .then(snap=>{ const d=snap.data(); const img=d&&d.img; if(img) window.fotoCache[id]=img; cb(img||null); })
+    .catch(()=>cb(null));
+}
+
+// pré-carrega no cache todas as fotos que estão como referência (chamado após carregar dados)
+function precarregarFotos(){
+  if(!fbReady || !fbFotos) return;
+  const ids=new Set();
+  const coletar=(arr)=>{ (arr||[]).forEach(o=>{ (o.fotos||[]).forEach(f=>{ if(ehRefFoto(f)) ids.add(idDaRef(f)); }); }); };
+  coletar(db.produtos); coletar(db.acessorios);
+  const pendentes=[...ids].filter(id=>!window.fotoCache[id]);
+  if(!pendentes.length) return;
+  let restantes=pendentes.length;
+  pendentes.forEach(id=>{
+    fbFotos.doc(id).get()
+      .then(snap=>{ const d=snap.data(); if(d&&d.img) window.fotoCache[id]=d.img; })
+      .catch(()=>{})
+      .finally(()=>{ if(--restantes===0){ try{ render(currentTab); }catch(e){} } });
+  });
+}
+
 function recomprimirDataURL(dataUrl, cb){
   // recomprime uma foto que já está salva (dataURL) para ficar menor
   if(!dataUrl || typeof dataUrl!=='string' || dataUrl.indexOf('data:image')!==0){ cb(dataUrl); return; }
@@ -1746,27 +1818,32 @@ function recomprimirDataURL(dataUrl, cb){
 }
 function otimizarFotos(){
   if(!podeEditar()){ toast('Só o administrador'); return; }
-  // junta todas as fotos de aparelhos e acessórios numa fila
+  if(!fbReady || !fbFotos){ toast('Sem conexão com a nuvem'); return; }
+  // junta todas as fotos EMBUTIDAS (não-ref) de aparelhos e acessórios
   const tarefas=[];
-  (db.produtos||[]).forEach(p=>{ if(Array.isArray(p.fotos)) p.fotos.forEach((f,i)=>tarefas.push({tipo:'prod',obj:p,idx:i})); });
-  (db.acessorios||[]).forEach(a=>{ if(Array.isArray(a.fotos)) a.fotos.forEach((f,i)=>tarefas.push({tipo:'acess',obj:a,idx:i})); });
-  if(!tarefas.length){ toast('Nenhuma foto para otimizar'); return; }
+  (db.produtos||[]).forEach(p=>{ if(Array.isArray(p.fotos)) p.fotos.forEach((f,i)=>{ if(!ehRefFoto(f)) tarefas.push({obj:p,idx:i}); }); });
+  (db.acessorios||[]).forEach(a=>{ if(Array.isArray(a.fotos)) a.fotos.forEach((f,i)=>{ if(!ehRefFoto(f)) tarefas.push({obj:a,idx:i}); }); });
+  if(!tarefas.length){ toast('Fotos já estão otimizadas ✓'); return; }
   const tamAntes=JSON.stringify(db).length;
-  toast('Otimizando '+tarefas.length+' fotos... aguarde');
+  toast('Otimizando '+tarefas.length+' fotos... aguarde, não feche o app');
   let i=0;
   const proximo=()=>{
     if(i>=tarefas.length){
       const tamDepois=JSON.stringify(db).length;
       const economiaKB=Math.round((tamAntes-tamDepois)/1024);
       saveDB();
-      toast('✓ Fotos otimizadas! Reduziu '+economiaKB+'KB. Agora: '+Math.round(tamDepois/1024)+'KB');
+      toast('✓ Pronto! Base caiu para '+Math.round(tamDepois/1024)+'KB (liberou '+economiaKB+'KB)');
+      render(currentTab);
       return;
     }
     const t=tarefas[i++];
-    recomprimirDataURL(t.obj.fotos[t.idx], (novo)=>{
-      t.obj.fotos[t.idx]=novo;
-      // deixa o navegador respirar entre fotos
-      setTimeout(proximo, 30);
+    const original=t.obj.fotos[t.idx];
+    // recomprime e depois salva como referência separada
+    recomprimirDataURL(original, (comprimida)=>{
+      salvarFotoSeparada(comprimida, (ref)=>{
+        t.obj.fotos[t.idx]=ref; // troca a imagem embutida pela referência leve
+        setTimeout(proximo, 40);
+      });
     });
   };
   proximo();
@@ -1840,32 +1917,33 @@ function saveProduto(id){
     if(el('es-ciclos')) data.ciclos=getV('es-ciclos');
     if(el('es-fonte')) data.fonte=getV('es-fonte');
   }
-  let prodFinal;
-  if(id){
+  converterFotosParaRefs(data.fotos, (refs)=>{
+   data.fotos=refs;
+   let prodFinal;
+   if(id){
     const p=db.produtos.find(x=>x.id===id); Object.assign(p,data); prodFinal=p;
     toast('Aparelho atualizado');
-  }else{
+   }else{
     data.id=uid(); db.produtos.push(data); prodFinal=data; toast('Aparelho cadastrado');
-  }
-  saveDB();
-  // Se este cadastro veio de uma troca dentro da venda, volta para o pagamento
-  // e usa o valor de compra como valor da entrada do aparelho.
-  if(usadoPagIndex!==null && pagState[usadoPagIndex]){
+   }
+   saveDB();
+   // Se este cadastro veio de uma troca dentro da venda, volta para o pagamento
+   // e usa o valor de compra como valor da entrada do aparelho.
+   if(usadoPagIndex!==null && pagState[usadoPagIndex]){
     const i=usadoPagIndex;
     usadoPagIndex=null;
     pagState[i].usadoProdutoId=prodFinal.id;
     pagState[i].usadoProduto={marca:prodFinal.marca,modelo:prodFinal.modelo,condicao:prodFinal.condicao,fotos:prodFinal.fotos||[]};
-    // Só preenche o valor da entrada com o valor de compra se ainda não houver um valor definido.
-    // Assim o que você digitar no campo "Valor" da entrada é respeitado e abate do total.
     if(!pagState[i].valor || pagState[i].valor===0){
       pagState[i].valor=Number(prodFinal.compra)||0;
     }
     closeSheet();
     drawPagamento();
     return;
-  }
-  usadoPagIndex=null;
-  closeSheet(); render(currentTab);
+   }
+   usadoPagIndex=null;
+   closeSheet(); render(currentTab);
+  });
 }
 
 /* ============ DETALHE PRODUTO ============ */
@@ -1873,7 +1951,7 @@ function openProdDetail(id){
   const p=db.produtos.find(x=>x.id===id); if(!p)return;
   const isAdmin=session&&session.role==='Administrador';
   const lucroPot=(Number(p.venda)||0)-(Number(p.compra)||0);
-  const fotos=(p.fotos||[]).map(f=>`<img class="ph" style="width:80px;height:80px" src="${f}">`).join('');
+  const fotos=(p.fotos||[]).filter(f=>temFoto(f)).map(f=>`<img class="ph" style="width:80px;height:80px" src="${imgFoto(f)}">`).join('');
   const html=`
     ${fotos?`<div class="photo-grid" style="margin-bottom:14px">${fotos}</div>`:''}
     <div class="big-num">${money(p.venda)}</div>
@@ -1943,7 +2021,7 @@ async function compartilharComFoto(id){
   const p=db.produtos.find(x=>x.id===id);
   if(!p){ toast('Aparelho não encontrado'); return; }
   const texto=textoOrcamento(p);
-  const foto=p.fotos&&p.fotos[0];
+  const foto=await new Promise(r=>resolverFoto(p.fotos&&p.fotos[0], r));
   // tenta compartilhar com a foto (API nativa do celular)
   try{
     if(foto && navigator.canShare){
@@ -2194,7 +2272,7 @@ function openClienteFromVenda(){
 function selCliente(id){ vendaCart.cliente=db.clientes.find(c=>c.id===id); closeSheet(); renderVenda(); }
 function pickProduto(){
   const disp=db.produtos.filter(p=>p.status==='Disponível');
-  const html= disp.length?`<div class="list">${disp.map(p=>`<div class="row" onclick="selProduto('${p.id}')"><div class="thumb">${p.fotos&&p.fotos[0]?`<img src="${p.fotos[0]}">`:(CAT_ICON[p.cat]||'📦')}</div><div class="info"><div class="t">${p.marca} ${p.modelo}</div><div class="s">${[p.cor,p.armazenamento].filter(Boolean).join(' · ')}</div></div><div class="right"><div class="p money-in">${money(p.venda)}</div></div></div>`).join('')}</div>`
+  const html= disp.length?`<div class="list">${disp.map(p=>`<div class="row" onclick="selProduto('${p.id}')"><div class="thumb">${temFoto(p.fotos&&p.fotos[0])?`<img src="${imgFoto(p.fotos[0])}">`:(CAT_ICON[p.cat]||'📦')}</div><div class="info"><div class="t">${p.marca} ${p.modelo}</div><div class="s">${[p.cor,p.armazenamento].filter(Boolean).join(' · ')}</div></div><div class="right"><div class="p money-in">${money(p.venda)}</div></div></div>`).join('')}</div>`
     :`<div class="empty">Nenhum aparelho disponível no estoque.</div>`;
   openSheet('Escolher aparelho', html);
 }
@@ -3098,8 +3176,15 @@ function openLogins(){
 }
 
 /* ============ BACKUP ============ */
+function montarBackupCompleto(){
+  // devolve uma cópia do db com as fotos embutidas (resolve refs pelo cache) — backup completo
+  const copia=JSON.parse(JSON.stringify(db));
+  const embutir=(arr)=>{ (arr||[]).forEach(o=>{ if(Array.isArray(o.fotos)) o.fotos=o.fotos.map(f=> ehRefFoto(f) ? (window.fotoCache[idDaRef(f)]||f) : f ); }); };
+  embutir(copia.produtos); embutir(copia.acessorios);
+  return JSON.stringify(copia);
+}
 function exportBackup(){
-  const dados=JSON.stringify(db);
+  const dados=montarBackupCompleto();
   const kb=Math.round(dados.length/1024);
   const html=`
     <div style="text-align:center;margin:6px 0 4px">
@@ -3118,7 +3203,7 @@ function exportBackup(){
 }
 async function bkpArquivos(){
   const nome='itronic-backup-'+todayStr()+'.json';
-  const dados=JSON.stringify(db);
+  const dados=montarBackupCompleto();
   // Melhor caminho no iPhone: compartilhar o ARQUIVO pela tela nativa do iOS
   // (abre "Salvar em Arquivos", WhatsApp, etc). Só funciona por HTTPS.
   try{
@@ -3147,7 +3232,7 @@ async function bkpArquivos(){
   }
 }
 function bkpWhatsapp(){
-  const dados=JSON.stringify(db);
+  const dados=montarBackupCompleto();
   // WhatsApp por link só manda texto. Backups grandes (com muitas fotos) não cabem.
   if(dados.length > 30000){
     askConfirm('Este backup é grande (tem fotos) e não cabe no WhatsApp como mensagem. Use "Salvar no aparelho" e depois anexe o arquivo no WhatsApp manualmente.', bkpArquivos, 'Salvar no aparelho');
@@ -3158,7 +3243,7 @@ function bkpWhatsapp(){
   toast('Abrindo WhatsApp...');
 }
 function bkpCopiar(){
-  const dados=JSON.stringify(db);
+  const dados=montarBackupCompleto();
   const done=()=>toast('Backup copiado ✓');
   const fail=()=>toast('Não consegui copiar. Use Salvar no aparelho.');
   if(navigator.clipboard&&navigator.clipboard.writeText){
@@ -3184,8 +3269,8 @@ function importBackup(e){
 function fotoVenda(v){
   const it=(v.itens||[])[0];
   if(it){
-    if(it.prodId){ const p=db.produtos.find(x=>x.id===it.prodId); if(p&&p.fotos&&p.fotos[0]) return p.fotos[0]; }
-    if(it.acessId){ const a=(db.acessorios||[]).find(x=>x.id===it.acessId); if(a&&a.fotos&&a.fotos[0]) return a.fotos[0]; }
+    if(it.prodId){ const p=db.produtos.find(x=>x.id===it.prodId); if(p&&temFoto(p.fotos&&p.fotos[0])) return imgFoto(p.fotos[0]); }
+    if(it.acessId){ const a=(db.acessorios||[]).find(x=>x.id===it.acessId); if(a&&temFoto(a.fotos&&a.fotos[0])) return imgFoto(a.fotos[0]); }
   }
   return null;
 }
