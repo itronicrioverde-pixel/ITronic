@@ -2,6 +2,9 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1819,30 +1822,67 @@ function recomprimirDataURL(dataUrl, cb){
 function otimizarFotos(){
   if(!podeEditar()){ toast('Só o administrador'); return; }
   if(!fbReady || !fbFotos){ toast('Sem conexão com a nuvem'); return; }
-  // junta todas as fotos EMBUTIDAS (não-ref) de aparelhos e acessórios
+  // conta o que tem hoje
+  let embutidas=0, refs=0;
+  const contar=(arr)=>{ (arr||[]).forEach(o=>{ (o.fotos||[]).forEach(f=>{ if(ehRefFoto(f)) refs++; else embutidas++; }); }); };
+  contar(db.produtos); contar(db.acessorios);
   const tarefas=[];
   (db.produtos||[]).forEach(p=>{ if(Array.isArray(p.fotos)) p.fotos.forEach((f,i)=>{ if(!ehRefFoto(f)) tarefas.push({obj:p,idx:i}); }); });
   (db.acessorios||[]).forEach(a=>{ if(Array.isArray(a.fotos)) a.fotos.forEach((f,i)=>{ if(!ehRefFoto(f)) tarefas.push({obj:a,idx:i}); }); });
-  if(!tarefas.length){ toast('Fotos já estão otimizadas ✓'); return; }
+  if(!tarefas.length){
+    // nada embutido — mas por que está grande? mostra o diagnóstico
+    const tam=Math.round(JSON.stringify(db).length/1024);
+    askConfirm('Diagnóstico: '+refs+' fotos já separadas, '+embutidas+' embutidas. Base='+tam+'KB. Se ainda está grande, toque OK para forçar reprocessar TODAS as fotos.', ()=>{ reprocessarTodasFotos(); });
+    return;
+  }
   const tamAntes=JSON.stringify(db).length;
-  toast('Otimizando '+tarefas.length+' fotos... aguarde, não feche o app');
-  let i=0;
+  toast('Otimizando '+tarefas.length+' fotos ('+embutidas+' embutidas)... aguarde');
+  let i=0, erros=0;
   const proximo=()=>{
     if(i>=tarefas.length){
       const tamDepois=JSON.stringify(db).length;
-      const economiaKB=Math.round((tamAntes-tamDepois)/1024);
       saveDB();
-      toast('✓ Pronto! Base caiu para '+Math.round(tamDepois/1024)+'KB (liberou '+economiaKB+'KB)');
-      render(currentTab);
+      setTimeout(()=>{
+        askConfirm('Resultado: base de '+Math.round(tamAntes/1024)+'KB → '+Math.round(tamDepois/1024)+'KB. Erros ao salvar na nuvem: '+erros+'. '+(erros>0?'Alguns não salvaram (veja regras do Firebase).':'Tudo certo!'), ()=>{ render(currentTab); });
+      },300);
       return;
     }
     const t=tarefas[i++];
     const original=t.obj.fotos[t.idx];
-    // recomprime e depois salva como referência separada
     recomprimirDataURL(original, (comprimida)=>{
-      salvarFotoSeparada(comprimida, (ref)=>{
-        t.obj.fotos[t.idx]=ref; // troca a imagem embutida pela referência leve
-        setTimeout(proximo, 40);
+      const id='f'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+      fbFotos.doc(id).set({ img:comprimida, criado:Date.now() })
+        .then(()=>{ window.fotoCache[id]=comprimida; t.obj.fotos[t.idx]='ref:'+id; })
+        .catch((e)=>{ erros++; /* mantém embutida */ })
+        .finally(()=>{ setTimeout(proximo, 40); });
+    });
+  };
+  proximo();
+}
+function reprocessarTodasFotos(){
+  // força: pega TODAS as fotos (inclusive as que já são ref, resolvendo do cache) e regrava comprimidas
+  if(!fbReady || !fbFotos){ toast('Sem nuvem'); return; }
+  const tarefas=[];
+  const juntar=(arr)=>{ (arr||[]).forEach(o=>{ if(Array.isArray(o.fotos)) o.fotos.forEach((f,i)=>tarefas.push({obj:o,idx:i,val:f})); }); };
+  juntar(db.produtos); juntar(db.acessorios);
+  if(!tarefas.length){ toast('Nenhuma foto'); return; }
+  toast('Reprocessando '+tarefas.length+' fotos...');
+  let i=0, erros=0;
+  const proximo=()=>{
+    if(i>=tarefas.length){
+      saveDB();
+      setTimeout(()=>toast('✓ Base agora: '+Math.round(JSON.stringify(db).length/1024)+'KB (erros: '+erros+')'),300);
+      return;
+    }
+    const t=tarefas[i++];
+    resolverFoto(t.val, (dataUrl)=>{
+      if(!dataUrl){ setTimeout(proximo,20); return; }
+      recomprimirDataURL(dataUrl, (comp)=>{
+        const id='f'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+        fbFotos.doc(id).set({ img:comp, criado:Date.now() })
+          .then(()=>{ window.fotoCache[id]=comp; t.obj.fotos[t.idx]='ref:'+id; })
+          .catch(()=>{ erros++; })
+          .finally(()=>{ setTimeout(proximo,40); });
       });
     });
   };
@@ -3092,7 +3132,7 @@ function openMenu(){
     </div>`:''}
     <input type="file" id="imp-input" accept="application/json" style="display:none" onchange="importBackup(event)">
     <button class="btn secondary" onclick="logout()" style="margin-top:16px">Sair da conta</button>
-    <div style="text-align:center;color:var(--text2);font-size:12px;margin-top:16px">Sistema de Gestão de Loja</div>
+    <div style="text-align:center;color:var(--text2);font-size:12px;margin-top:16px">Sistema de Gestão de Loja · v9</div>
   `;
   openSheet('Menu', html);
 }
