@@ -1106,11 +1106,31 @@ function renderEstoque(){
     <div style="height:20px"></div>
   `;
 }
+function ordenarModelo(a,b){
+  // extrai o número do modelo (11, 12, 13...) e a variante
+  const parse=(p)=>{
+    const txt=((p.marca||'')+' '+(p.modelo||'')).toLowerCase();
+    const num=parseFloat((txt.match(/\d+/)||[9999])[0]); // primeiro número
+    // peso da variante: normal < plus/mini < pro < pro max
+    let variante=0;
+    if(/pro\s*max/.test(txt)) variante=3;
+    else if(/pro/.test(txt)) variante=2;
+    else if(/plus|max/.test(txt)) variante=1;
+    else if(/mini|se|e\b/.test(txt)) variante=0.5;
+    return {num, variante, txt};
+  };
+  const A=parse(a), B=parse(b);
+  if(A.num!==B.num) return A.num-B.num;        // 11 antes de 12
+  if(A.variante!==B.variante) return A.variante-B.variante; // normal, plus, pro, pro max
+  return A.txt.localeCompare(B.txt);            // resto alfabético
+}
 function renderEstoqueAgrupado(lista){
   // agrupa por categoria, na ordem preferida
   const ordem=['iPad','iPhone','Apple Watch','MacBook','AirPods','Acessório'];
   const grupos={};
   lista.forEach(p=>{ const c=p.cat||'Outros'; if(!grupos[c]) grupos[c]=[]; grupos[c].push(p); });
+  // ordena dentro de cada grupo por modelo
+  Object.keys(grupos).forEach(c=>{ grupos[c].sort(ordenarModelo); });
   // monta a ordem: primeiro os da lista de ordem, depois qualquer outro que sobrar
   const cats=[];
   ordem.forEach(c=>{ if(grupos[c]) cats.push(c); });
