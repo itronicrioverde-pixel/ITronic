@@ -1725,6 +1725,52 @@ function renderFotos(){
   g.innerHTML = tempFotos.map((f,i)=>`<div class="photo-wrap"><img class="ph" src="${f}"><div class="del" onclick="tempFotos.splice(${i},1);renderFotos()">×</div></div>`).join('')
     + `<div class="photo-add" onclick="el('foto-input').click()"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg></div>`;
 }
+function recomprimirDataURL(dataUrl, cb){
+  // recomprime uma foto que já está salva (dataURL) para ficar menor
+  if(!dataUrl || typeof dataUrl!=='string' || dataUrl.indexOf('data:image')!==0){ cb(dataUrl); return; }
+  const img=new Image();
+  img.onload=()=>{
+    try{
+      const max=800, sc=Math.min(1,max/Math.max(img.width,img.height));
+      const cv=document.createElement('canvas');
+      cv.width=Math.max(1,Math.round(img.width*sc));
+      cv.height=Math.max(1,Math.round(img.height*sc));
+      cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
+      const out=cv.toDataURL('image/jpeg',0.55);
+      // só usa a nova se ficou menor
+      cb(out&&out.length>100&&out.length<dataUrl.length ? out : dataUrl);
+    }catch(err){ cb(dataUrl); }
+  };
+  img.onerror=()=>cb(dataUrl);
+  img.src=dataUrl;
+}
+function otimizarFotos(){
+  if(!podeEditar()){ toast('Só o administrador'); return; }
+  // junta todas as fotos de aparelhos e acessórios numa fila
+  const tarefas=[];
+  (db.produtos||[]).forEach(p=>{ if(Array.isArray(p.fotos)) p.fotos.forEach((f,i)=>tarefas.push({tipo:'prod',obj:p,idx:i})); });
+  (db.acessorios||[]).forEach(a=>{ if(Array.isArray(a.fotos)) a.fotos.forEach((f,i)=>tarefas.push({tipo:'acess',obj:a,idx:i})); });
+  if(!tarefas.length){ toast('Nenhuma foto para otimizar'); return; }
+  const tamAntes=JSON.stringify(db).length;
+  toast('Otimizando '+tarefas.length+' fotos... aguarde');
+  let i=0;
+  const proximo=()=>{
+    if(i>=tarefas.length){
+      const tamDepois=JSON.stringify(db).length;
+      const economiaKB=Math.round((tamAntes-tamDepois)/1024);
+      saveDB();
+      toast('✓ Fotos otimizadas! Reduziu '+economiaKB+'KB. Agora: '+Math.round(tamDepois/1024)+'KB');
+      return;
+    }
+    const t=tarefas[i++];
+    recomprimirDataURL(t.obj.fotos[t.idx], (novo)=>{
+      t.obj.fotos[t.idx]=novo;
+      // deixa o navegador respirar entre fotos
+      setTimeout(proximo, 30);
+    });
+  };
+  proximo();
+}
 function comprimirFoto(file, cb){
   // aceita qualquer arquivo que seja imagem (por tipo ou por extensão)
   const nome=(file.name||'').toLowerCase();
@@ -2961,6 +3007,7 @@ function openMenu(){
     </div>
     ${isAdmin?`<div class="sec-title">Backup e segurança</div>
     <div class="list">
+      <div class="link-row" onclick="otimizarFotos()">🗜️ Otimizar fotos (liberar espaço) ${chev()}</div>
       <div class="link-row" onclick="exportBackup()">Exportar backup ${chev()}</div>
       <div class="link-row" onclick="el('imp-input').click()">Importar backup ${chev()}</div>
       <div class="link-row" onclick="zerarSistema()" style="color:var(--red)">Zerar sistema (apagar tudo) ${chev()}</div>
