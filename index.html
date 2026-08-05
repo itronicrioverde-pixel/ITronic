@@ -572,9 +572,23 @@ function pushToCloud(){
   savingToCloud=true;
   const agora=Date.now();
   cloudVersion=agora;
-  fbDoc.set({ json: JSON.stringify(db), atualizado: agora })
+  const payload=JSON.stringify(db);
+  const tamKB=Math.round(payload.length/1024);
+  // Firebase limita ~1MB (1048487 bytes) por documento. Avisa antes de estourar.
+  if(payload.length > 900000){
+    toast('⚠️ Atenção: dados quase no limite ('+tamKB+'KB). Reduza fotos antigas ou faça backup.');
+  }
+  if(payload.length > 1048000){
+    toast('❌ Dados grandes demais ('+tamKB+'KB)! A nuvem NÃO vai salvar. Remova algumas fotos.');
+    savingToCloud=false;
+    return; // não tenta gravar, evita perder o que já está na nuvem
+  }
+  fbDoc.set({ json: payload, atualizado: agora })
     .then(()=>{ setTimeout(()=>{ savingToCloud=false; }, 400); })
-    .catch(()=>{ savingToCloud=false; });
+    .catch((err)=>{
+      savingToCloud=false;
+      toast('❌ Erro ao salvar na nuvem. Verifique a internet e o tamanho das fotos.');
+    });
 }
 
 /* ============ TEMA ============ */
@@ -1087,10 +1101,24 @@ function renderEstoque(){
     <div class="filters">
       ${['todos:Todos','disp:Disponíveis','res:Reservados','vend:Vendidos','parado:Parados'].map(f=>{const[k,l]=f.split(':');return `<button class="chip ${filterEstoque===k?'active':''}" onclick="setFiltroEstoque('${k}')">${l}</button>`}).join('')}
     </div>
-    ${lista.length? `<div class="list">${lista.map(prodRow).join('')}</div>` :
+    ${lista.length? renderEstoqueAgrupado(lista) :
       `<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M3 10h18"/></svg><div>Nenhum aparelho aqui.<br>Toque em + para cadastrar.</div></div>`}
     <div style="height:20px"></div>
   `;
+}
+function renderEstoqueAgrupado(lista){
+  // agrupa por categoria, na ordem preferida
+  const ordem=['iPad','iPhone','Apple Watch','MacBook','AirPods','Acessório'];
+  const grupos={};
+  lista.forEach(p=>{ const c=p.cat||'Outros'; if(!grupos[c]) grupos[c]=[]; grupos[c].push(p); });
+  // monta a ordem: primeiro os da lista de ordem, depois qualquer outro que sobrar
+  const cats=[];
+  ordem.forEach(c=>{ if(grupos[c]) cats.push(c); });
+  Object.keys(grupos).forEach(c=>{ if(!cats.includes(c)) cats.push(c); });
+  return cats.map(c=>`
+    <div class="sec-title" style="margin-top:14px">${CAT_ICON[c]||'📦'} ${c} <span style="color:var(--text2);font-weight:400">(${grupos[c].length})</span></div>
+    <div class="list">${grupos[c].map(prodRow).join('')}</div>
+  `).join('');
 }
 function prodRow(p){
   const b = p.status==='Disponível'?'disp':p.status==='Reservado'?'res':'vend';
@@ -1146,7 +1174,7 @@ function renderVenda(){
     <div class="sec-title">Aparelho</div>
     <div class="list">
       <div class="row" onclick="pickProduto()">
-        <div class="thumb">${c.produto?(CAT_ICON[c.produto.cat]||'📦'):'📱'}</div>
+        <div class="thumb">${c.produto?(c.produto.fotos&&c.produto.fotos[0]?`<img src="${c.produto.fotos[0]}">`:(CAT_ICON[c.produto.cat]||'📦')):'📱'}</div>
         <div class="info"><div class="t">${c.produto?(c.produto.marca+' '+c.produto.modelo):'Selecionar aparelho'}</div>
         <div class="s">${c.produto?[c.produto.cor,c.produto.armazenamento].filter(Boolean).join(' · '):(disp.length+' disponíveis')}</div></div>
         <div class="right">${c.produto?`<div class="p money-in">${money(c.produto.venda)}</div>`:''}${chev()}</div>
@@ -1213,16 +1241,15 @@ function renderCarrinhoAcess(isAdmin){
     const qtdCat=grupos[cat].length;
     const noCarrinhoCat=grupos[cat].reduce((s,a)=>{const it=carrinhoAcess.find(x=>x.id===a.id);return s+(it?it.qtd:0);},0);
     const primeiraFoto=grupos[cat].find(a=>a.fotos&&a.fotos[0]);
-    const thumb=primeiraFoto?`<img src="${primeiraFoto.fotos[0]}">`:'🎧';
     return `
-    <div class="list" style="margin-bottom:${aberta?'0':'12px'}">
-      <div class="row" onclick="toggleCatAcess('${cat.replace(/'/g,"\\'")}')" style="cursor:pointer">
-        <div class="thumb" style="padding:6px;background:#fff;border:1px solid var(--line)">${primeiraFoto?`<img src="${primeiraFoto.fotos[0]}" style="width:100%;height:100%;object-fit:contain">`:'<span style="font-size:22px">🎧</span>'}</div>
+    <div class="list" style="margin-bottom:10px">
+      <div class="row" onclick="toggleCatAcess('${cat.replace(/'/g,"\\'")}')" style="cursor:pointer;border-bottom:${aberta?'.5px solid var(--line)':'none'}">
+        <div class="thumb" style="${primeiraFoto?'padding:5px;background:#fff;border:1px solid var(--line)':''}">${primeiraFoto?`<img src="${primeiraFoto.fotos[0]}" style="width:100%;height:100%;object-fit:contain">`:'🎧'}</div>
         <div class="info"><div class="t">${cat}</div><div class="s">${qtdCat} ${qtdCat===1?'item':'itens'}${noCarrinhoCat>0?` · <span style="color:var(--blue);font-weight:600">${noCarrinhoCat} no carrinho</span>`:''}</div></div>
         <div class="right" style="font-size:20px;color:var(--text2);transform:rotate(${aberta?'90':'0'}deg);transition:transform .2s">›</div>
       </div>
+      ${aberta?grupos[cat].map(a=>renderItemAcess(a,isAdmin)).join(''):''}
     </div>
-    ${aberta?`<div class="list" style="margin-top:-4px;margin-bottom:12px;margin-left:12px">${grupos[cat].map(a=>renderItemAcess(a,isAdmin)).join('')}</div>`:''}
   `;}).join('') : `<div class="empty">Nenhum acessório cadastrado.${podeEditar()?' Toque em "+ Cadastrar".':''}</div>`;
   return `
     <div style="display:flex;justify-content:space-between;align-items:center;margin:16px 0 8px">
@@ -1689,12 +1716,12 @@ function comprimirFoto(file, cb){
     const img=new Image();
     img.onload=()=>{
       try{
-        const max=1000, sc=Math.min(1,max/Math.max(img.width,img.height));
+        const max=800, sc=Math.min(1,max/Math.max(img.width,img.height));
         const cv=document.createElement('canvas');
         cv.width=Math.max(1,Math.round(img.width*sc));
         cv.height=Math.max(1,Math.round(img.height*sc));
         cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
-        const out=cv.toDataURL('image/jpeg',0.72);
+        const out=cv.toDataURL('image/jpeg',0.6);
         // se por algum motivo o canvas devolveu vazio, usa a original
         cb(out&&out.length>100 ? out : dataOriginal);
       }catch(err){ cb(dataOriginal); } // fallback: guarda a original
@@ -2062,7 +2089,7 @@ function openClienteDetail(id){
     ${c.obs?`<div class="card" style="margin-top:12px"><div style="font-size:13px;color:var(--text2);margin-bottom:4px">Observações</div>${c.obs}</div>`:''}
     <div class="sec-title">Histórico de compras (${compras.length})</div>
     ${compras.length?`<div class="list">${compras.slice().reverse().map(v=>`
-      <div class="row" onclick="openVendaDetail('${v.id}')"><div class="thumb">🧾</div>
+      <div class="row" onclick="openVendaDetail('${v.id}')"><div class="thumb">${thumbVenda(v)}</div>
       <div class="info"><div class="t">${v.itens.map(i=>i.nome).join(', ')}</div><div class="s">${fmtData(v.data)}</div></div>
       <div class="right"><div class="p money-in">${money(vendaLiquido(v))}</div></div></div>`).join('')}</div>`
       :`<div class="empty" style="padding:24px">Nenhuma compra ainda.</div>`}
@@ -2101,7 +2128,7 @@ function openClienteFromVenda(){
 function selCliente(id){ vendaCart.cliente=db.clientes.find(c=>c.id===id); closeSheet(); renderVenda(); }
 function pickProduto(){
   const disp=db.produtos.filter(p=>p.status==='Disponível');
-  const html= disp.length?`<div class="list">${disp.map(p=>`<div class="row" onclick="selProduto('${p.id}')"><div class="thumb">${CAT_ICON[p.cat]||'📦'}</div><div class="info"><div class="t">${p.marca} ${p.modelo}</div><div class="s">${[p.cor,p.armazenamento].filter(Boolean).join(' · ')}</div></div><div class="right"><div class="p money-in">${money(p.venda)}</div></div></div>`).join('')}</div>`
+  const html= disp.length?`<div class="list">${disp.map(p=>`<div class="row" onclick="selProduto('${p.id}')"><div class="thumb">${p.fotos&&p.fotos[0]?`<img src="${p.fotos[0]}">`:(CAT_ICON[p.cat]||'📦')}</div><div class="info"><div class="t">${p.marca} ${p.modelo}</div><div class="s">${[p.cor,p.armazenamento].filter(Boolean).join(' · ')}</div></div><div class="right"><div class="p money-in">${money(p.venda)}</div></div></div>`).join('')}</div>`
     :`<div class="empty">Nenhum aparelho disponível no estoque.</div>`;
   openSheet('Escolher aparelho', html);
 }
@@ -2787,7 +2814,7 @@ function dividasDeVenda(){
   if(dev.length===0) return '';
   return `<div class="sec-title">De vendas (clientes devendo)</div><div class="list">${dev.map(v=>`
     <div class="row" onclick="openVendaDetail('${v.id}')">
-      <div class="thumb">🧾</div>
+      <div class="thumb">${thumbVenda(v)}</div>
       <div class="info"><div class="t">${v.clienteNome}</div><div class="s">${v.itens.map(i=>i.nome).join(', ')} · ${fmtData(v.data)}</div></div>
       <div class="right"><div class="p money-in neg">${money(v.aReceber)}</div></div>
     </div>`).join('')}</div>`;
@@ -2862,7 +2889,7 @@ function relVendas(){
       <div class="detail-line"><span class="k">Vendas em ${nomeMes}</span><span class="v">${vs.length}</span></div>
       <div class="detail-line"><span class="k">Faturado</span><span class="v money-in">${money(totalMes)}</span></div>
     </div>
-    <div class="list">${vs.map(v=>`<div class="row" onclick="openVendaDetail('${v.id}')"><div class="thumb">🧾</div><div class="info"><div class="t">${v.itens.map(i=>i.nome).join(', ')}</div><div class="s">${v.clienteNome} · ${fmtData(v.data)}</div></div><div class="right"><div class="p money-in">${money(vendaLiquido(v))}</div></div></div>`).join('')}</div>`:`<div class="empty">Nenhuma venda em ${nomeMes}.</div>`;
+    <div class="list">${vs.map(v=>`<div class="row" onclick="openVendaDetail('${v.id}')"><div class="thumb">${thumbVenda(v)}</div><div class="info"><div class="t">${v.itens.map(i=>i.nome).join(', ')}</div><div class="s">${v.clienteNome} · ${fmtData(v.data)}</div></div><div class="right"><div class="p money-in">${money(vendaLiquido(v))}</div></div></div>`).join('')}</div>`:`<div class="empty">Nenhuma venda em ${nomeMes}.</div>`;
   openSheet('Vendas · '+nomeMes, html);
 }
 function relEstoque(){
@@ -2890,7 +2917,7 @@ function relLucro(){
   const html=`
     <div class="big-num money-in ${totLucro>=0?'pos':'neg'}">${money(totLucro)}</div>
     <div style="text-align:center;color:var(--text2);margin-bottom:16px">Lucro de ${nomeMes}</div>
-    ${vs.length?`<div class="list">${vs.map(v=>{const l=lucroVenda(v);return `<div class="row" onclick="openVendaDetail('${v.id}')"><div class="thumb">${l>=0?'📈':'📉'}</div><div class="info"><div class="t">${v.itens.map(i=>i.nome).join(', ')}</div><div class="s">${fmtData(v.data)}</div></div><div class="right"><div class="p money-in ${l>=0?'pos':'neg'}">${money(l)}</div></div></div>`}).join('')}</div>`:`<div class="empty">Sem vendas em ${nomeMes}.</div>`}
+    ${vs.length?`<div class="list">${vs.map(v=>{const l=lucroVenda(v);return `<div class="row" onclick="openVendaDetail('${v.id}')"><div class="thumb">${thumbVenda(v, l>=0?'📈':'📉')}</div><div class="info"><div class="t">${v.itens.map(i=>i.nome).join(', ')}</div><div class="s">${fmtData(v.data)}</div></div><div class="right"><div class="p money-in ${l>=0?'pos':'neg'}">${money(l)}</div></div></div>`}).join('')}</div>`:`<div class="empty">Sem vendas em ${nomeMes}.</div>`}
   `;
   openSheet('Lucro · '+nomeMes, html);
 }
@@ -3087,6 +3114,18 @@ function importBackup(e){
 }
 
 /* ============ UTIL ============ */
+function fotoVenda(v){
+  const it=(v.itens||[])[0];
+  if(it){
+    if(it.prodId){ const p=db.produtos.find(x=>x.id===it.prodId); if(p&&p.fotos&&p.fotos[0]) return p.fotos[0]; }
+    if(it.acessId){ const a=(db.acessorios||[]).find(x=>x.id===it.acessId); if(a&&a.fotos&&a.fotos[0]) return a.fotos[0]; }
+  }
+  return null;
+}
+function thumbVenda(v,fallback){
+  const f=fotoVenda(v);
+  return f?`<img src="${f}">`:(fallback||'🧾');
+}
 function fmtData(s){ if(!s)return'—'; const d=new Date(s.length<=10?s+'T12:00':s); return d.toLocaleDateString('pt-BR'); }
 let toastT;
 function toast(msg){
