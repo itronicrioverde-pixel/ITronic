@@ -266,6 +266,23 @@ select.input{appearance:none;-webkit-appearance:none;background-image:url("data:
 .neg{color:var(--red)}
 .divider{height:.5px;background:var(--line);margin:14px 0}
 .mini-lbl{font-size:13px;color:var(--text2);margin:0 4px 6px;font-weight:500}
+.pay-opt{display:flex;align-items:center;gap:12px;padding:14px;border-radius:16px;margin-bottom:10px;border:1.5px solid transparent}
+.pay-opt .pay-ico{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;background:rgba(255,255,255,.6);flex-shrink:0}
+.pay-opt .pay-mid{flex:1;min-width:0}
+.pay-opt .pay-nome{font-weight:700;font-size:16px;color:#1d1d1f}
+.pay-opt .pay-sub{font-size:12px;color:#6e6e73;margin-top:1px}
+.pay-opt .pay-val{font-weight:800;font-size:18px;text-align:right;color:#1d1d1f}
+.pay-opt .pay-parc{font-size:12px;font-weight:600;color:#6e6e73;margin-top:2px}
+.pay-pix{background:linear-gradient(135deg,#e3f9ee,#d0f5e2);border-color:#34c759}
+.pay-pix .pay-val{color:#1a8f4a}
+.pay-deb{background:linear-gradient(135deg,#e7f0ff,#dbe8ff);border-color:#3b82f6}
+.pay-deb .pay-val{color:#1d5fd4}
+.pay-cred{background:linear-gradient(135deg,#f3ecff,#e9dcff);border-color:#8b5cf6}
+.pay-cred .pay-val{color:#6d28d9}
+.sim-card{background:var(--card);border-radius:18px;box-shadow:var(--shadow);padding:16px;margin-bottom:14px}
+.sim-difer-box{background:linear-gradient(135deg,#1d1d1f,#3a3a3c);border-radius:18px;padding:18px 20px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center}
+.sim-difer-box .k{color:rgba(255,255,255,.7);font-size:14px}
+.sim-difer-box .v{color:#fff;font-size:26px;font-weight:800}
 .inline-2{display:flex;gap:10px;align-items:center}
 .link-row{padding:14px 16px;font-size:16px;color:var(--text);display:flex;justify-content:space-between;align-items:center;border-bottom:.5px solid var(--line)}
 .link-row:last-child{border-bottom:none}
@@ -461,7 +478,7 @@ let painelMes='todos'; // mês escolhido no painel ('todos' = geral)
 let vendaCart={cliente:null, produto:null, produtoId:null, desconto:0, pagamentos:[]};
 let vendaModo='aparelho'; // 'aparelho', 'acessorio' ou 'simulador'
 let carrinhoAcess=[]; // itens de acessório no carrinho: {id, qtd}
-const MODELOS_IPHONE=['iPhone 14','iPhone 14 Plus','iPhone 14 Pro','iPhone 14 Pro Max','iPhone 15','iPhone 15 Plus','iPhone 15 Pro','iPhone 15 Pro Max','iPhone 16','iPhone 16 Plus','iPhone 16 Pro','iPhone 16 Pro Max','iPhone 16e','iPhone 17','iPhone 17 Pro','iPhone 17 Pro Max','iPhone 17e'];
+const MODELOS_IPHONE=['iPhone 11','iPhone 11 Pro','iPhone 11 Pro Max','iPhone 12 mini','iPhone 12','iPhone 12 Pro','iPhone 12 Pro Max','iPhone 13 mini','iPhone 13','iPhone 13 Pro','iPhone 13 Pro Max','iPhone 14','iPhone 14 Plus','iPhone 14 Pro','iPhone 14 Pro Max','iPhone 15','iPhone 15 Plus','iPhone 15 Pro','iPhone 15 Pro Max','iPhone 16','iPhone 16 Plus','iPhone 16 Pro','iPhone 16 Pro Max','iPhone 16e','iPhone 17','iPhone 17 Pro','iPhone 17 Pro Max','iPhone 17e'];
 let simState={parcCred:1};
 let catsAbertas={}; // quais categorias de acessório estão expandidas
 
@@ -475,7 +492,7 @@ function defaultDB(){
     users:[{id:uid(),user:'admin',pass:'1234',nome:'Administrador',role:'Administrador'}],
     produtos:[], acessorios:[], clientes:[], vendas:[], compras:[], logins:[], contas:[], caixa:[], categorias:['Fornecedor','Aluguel','Retirada','Despesa','Salário','Outros'],
     condPag:{ parcelasCartao:3, descontoDinheiro:5, mostrarPix:true, mostrarCartao:true, mostrarDinheiro:true },
-    taxasCartao:{ debito:1.5, credito:[3.5,4.5,5.5,6.5,7.5,8.5,9.5,10.5,11.5,12.5,13.5,14.5,15.5,16.5,17.5,18.5,19.5,20.5,21.5,22.5,23.5] }
+    taxasCartao:{ debito:1.5, imposto:0, credito:[3.5,4.5,5.5,6.5,7.5,8.5,9.5,10.5,11.5,12.5,13.5,14.5,15.5,16.5,17.5,18.5,19.5,20.5,21.5,22.5,23.5] }
   };
 }
 function vendasVisiveis(){
@@ -518,7 +535,7 @@ function loadDB(){
   const raw = localStorage.getItem(DB_KEY);
   if(raw){ try{ db = JSON.parse(raw); }catch(e){ db=null; } }
   if(!db) db = defaultDB();
-  if(!db.acessorios) db.acessorios=[]; if(!db.condPag) db.condPag={parcelasCartao:3,descontoDinheiro:5,mostrarPix:true,mostrarCartao:true,mostrarDinheiro:true}; if(!db.taxasCartao) db.taxasCartao={debito:1.5,credito:[3.5,4.5,5.5,6.5,7.5,8.5,9.5,10.5,11.5,12.5,13.5,14.5,15.5,16.5,17.5,18.5,19.5,20.5,21.5,22.5,23.5]}; if(!db.logins) db.logins=[]; if(!db.contas) db.contas=[]; if(!db.caixa) db.caixa=[]; if(!db.categorias) db.categorias=["Fornecedor","Aluguel","Retirada","Despesa","Salário","Outros"];
+  if(!db.acessorios) db.acessorios=[]; if(!db.condPag) db.condPag={parcelasCartao:3,descontoDinheiro:5,mostrarPix:true,mostrarCartao:true,mostrarDinheiro:true}; if(!db.taxasCartao) db.taxasCartao={debito:1.5,imposto:0,credito:[3.5,4.5,5.5,6.5,7.5,8.5,9.5,10.5,11.5,12.5,13.5,14.5,15.5,16.5,17.5,18.5,19.5,20.5,21.5,22.5,23.5]}; if(db.taxasCartao && db.taxasCartao.imposto===undefined) db.taxasCartao.imposto=0; if(!db.logins) db.logins=[]; if(!db.contas) db.contas=[]; if(!db.caixa) db.caixa=[]; if(!db.categorias) db.categorias=["Fornecedor","Aluguel","Retirada","Despesa","Salário","Outros"];
   reconciliarVendidos();
   theme = localStorage.getItem('itronic_theme') || 'light';
 
@@ -544,7 +561,7 @@ function loadDB(){
             if(v < cloudVersion){ return; }
             cloudVersion = v;
             db = parsed;
-            if(!db.acessorios) db.acessorios=[]; if(!db.condPag) db.condPag={parcelasCartao:3,descontoDinheiro:5,mostrarPix:true,mostrarCartao:true,mostrarDinheiro:true}; if(!db.taxasCartao) db.taxasCartao={debito:1.5,credito:[3.5,4.5,5.5,6.5,7.5,8.5,9.5,10.5,11.5,12.5,13.5,14.5,15.5,16.5,17.5,18.5,19.5,20.5,21.5,22.5,23.5]}; if(!db.logins) db.logins=[]; if(!db.contas) db.contas=[]; if(!db.caixa) db.caixa=[]; if(!db.categorias) db.categorias=["Fornecedor","Aluguel","Retirada","Despesa","Salário","Outros"];
+            if(!db.acessorios) db.acessorios=[]; if(!db.condPag) db.condPag={parcelasCartao:3,descontoDinheiro:5,mostrarPix:true,mostrarCartao:true,mostrarDinheiro:true}; if(!db.taxasCartao) db.taxasCartao={debito:1.5,imposto:0,credito:[3.5,4.5,5.5,6.5,7.5,8.5,9.5,10.5,11.5,12.5,13.5,14.5,15.5,16.5,17.5,18.5,19.5,20.5,21.5,22.5,23.5]}; if(db.taxasCartao && db.taxasCartao.imposto===undefined) db.taxasCartao.imposto=0; if(!db.logins) db.logins=[]; if(!db.contas) db.contas=[]; if(!db.caixa) db.caixa=[]; if(!db.categorias) db.categorias=["Fornecedor","Aluguel","Retirada","Despesa","Salário","Outros"];
             reconciliarVendidos();
             localStorage.setItem(DB_KEY, JSON.stringify(db));
             dbLoaded=true;
@@ -2679,26 +2696,32 @@ function openSimulador(){ closeSheet(); vendaModo='simulador'; go('venda'); }
 function renderSimuladorInline(){
   const opt=(sel)=>MODELOS_IPHONE.map(m=>`<option value="${m}" ${m===sel?'selected':''}>${m}</option>`).join('');
   return `
-    <div class="sec-title">Simulador de troca</div>
-    <div class="mini-lbl">iPhone novo (que o cliente leva)</div>
-    <select class="input" id="sim-mod-novo">${opt('iPhone 15')}</select>
-    <input class="input" id="sim-val-novo" type="text" inputmode="decimal" placeholder="Valor do novo (R$)" oninput="calcSimTroca()" style="margin-top:8px">
-
-    <div class="mini-lbl" style="margin-top:14px">iPhone usado (que entra na troca)</div>
-    <select class="input" id="sim-mod-usado">${opt('iPhone 14')}</select>
-    <input class="input" id="sim-val-usado" type="text" inputmode="decimal" placeholder="Valor que você paga no usado (R$)" oninput="calcSimTroca()" style="margin-top:8px">
-
-    <div class="card" style="margin-top:16px;background:var(--bg2);box-shadow:none">
-      <div class="detail-line"><span class="k">Diferença a pagar</span><span class="v money-in" id="sim-difer" style="font-size:20px;font-weight:700">R$ 0,00</span></div>
+    <div class="sim-card">
+      <div style="font-weight:700;font-size:15px;margin-bottom:12px">📲 iPhone novo <span style="color:var(--text2);font-weight:400;font-size:13px">(que o cliente leva)</span></div>
+      <select class="input" id="sim-mod-novo">${opt('iPhone 15')}</select>
+      <input class="input" id="sim-val-novo" type="text" inputmode="decimal" placeholder="Valor do novo (R$)" oninput="calcSimTroca()" style="margin-top:10px">
     </div>
 
-    <div class="mini-lbl" style="margin-top:14px">Parcelas no crédito</div>
-    <select class="input" id="sim-parc" onchange="simState.parcCred=parseInt(this.value);calcSimTroca()">
-      ${Array.from({length:21},(_,i)=>i+1).map(n=>`<option value="${n}" ${n===simState.parcCred?'selected':''}>${n}x</option>`).join('')}
-    </select>
+    <div class="sim-card">
+      <div style="font-weight:700;font-size:15px;margin-bottom:12px">🔄 iPhone usado <span style="color:var(--text2);font-weight:400;font-size:13px">(entra na troca)</span></div>
+      <select class="input" id="sim-mod-usado">${opt('iPhone 14')}</select>
+      <input class="input" id="sim-val-usado" type="text" inputmode="decimal" placeholder="Valor que você paga no usado (R$)" oninput="calcSimTroca()" style="margin-top:10px">
+    </div>
 
-    <div class="card" style="margin-top:16px" id="sim-out"></div>
-    <button class="btn" onclick="copiarSimTroca()" style="margin-top:12px;background:#25D366">📤 Copiar orçamento pro WhatsApp</button>
+    <div class="sim-difer-box">
+      <span class="k">Diferença a pagar</span>
+      <span class="v" id="sim-difer">R$ 0,00</span>
+    </div>
+
+    <div class="sim-card">
+      <div class="mini-lbl">Parcelas no crédito</div>
+      <select class="input" id="sim-parc" onchange="simState.parcCred=parseInt(this.value);calcSimTroca()">
+        ${Array.from({length:21},(_,i)=>i+1).map(n=>`<option value="${n}" ${n===simState.parcCred?'selected':''}>${n}x</option>`).join('')}
+      </select>
+      <div id="sim-out" style="margin-top:14px"></div>
+    </div>
+
+    <button class="btn" onclick="copiarSimTroca()" style="background:#25D366">📤 Copiar orçamento pro WhatsApp</button>
     ${podeEditar()?`<button class="btn secondary" onclick="openTaxasCartao()" style="margin-top:8px">⚙️ Ajustar taxas do cartão</button>`:''}
     <div style="height:20px"></div>
   `;
@@ -2708,20 +2731,32 @@ function calcSimTroca(){
   const vUsado=parseFloat(String(getV('sim-val-usado')).replace(',','.'))||0;
   const difer=Math.max(0,vNovo-vUsado);
   const eldif=el('sim-difer'); if(eldif) eldif.textContent=money(difer);
-  const tx=db.taxasCartao||{debito:1.5,credito:[]};
+  const tx=db.taxasCartao||{debito:1.5,imposto:0,credito:[]};
+  const imposto=Number(tx.imposto)||0;
   const parc=simState.parcCred||1;
-  // taxa repassada pro cliente: valor / (1 - taxa%)
-  const comTaxa=(base,taxa)=> taxa>0 ? base/(1-taxa/100) : base;
+  // taxa + imposto repassados pro cliente: valor / (1 - (taxa+imposto)%)
+  const comTaxa=(base,taxa)=>{ const t=taxa+imposto; return t>0 ? base/(1-t/100) : base; };
   const taxaCred=(tx.credito&&tx.credito[parc-1])||0;
   const vDebito=comTaxa(difer,tx.debito);
   const vCredito=comTaxa(difer,taxaCred);
   const out=el('sim-out');
   if(out){
     out.innerHTML=`
-      <div class="detail-line"><span class="k">💠 À vista Pix</span><span class="v money-in">${money(difer)}</span></div>
-      <div class="detail-line"><span class="k">💳 Débito (${tx.debito}%)</span><span class="v money-in">${money(vDebito)}</span></div>
-      <div class="detail-line"><span class="k">💳 Crédito ${parc}x (${taxaCred}%)</span><span class="v money-in">${money(vCredito)}</span></div>
-      <div class="detail-line"><span class="k" style="padding-left:12px">${parc}x de</span><span class="v money-in">${money(vCredito/parc)}</span></div>
+      <div class="pay-opt pay-pix">
+        <div class="pay-ico">💠</div>
+        <div class="pay-mid"><div class="pay-nome">À vista no Pix</div><div class="pay-sub">Sem taxa</div></div>
+        <div class="pay-val">${money(difer)}</div>
+      </div>
+      <div class="pay-opt pay-deb">
+        <div class="pay-ico">💳</div>
+        <div class="pay-mid"><div class="pay-nome">Débito</div><div class="pay-sub">taxa ${tx.debito}%${imposto?' + imp '+imposto+'%':''}</div></div>
+        <div class="pay-val">${money(vDebito)}</div>
+      </div>
+      <div class="pay-opt pay-cred">
+        <div class="pay-ico">💳</div>
+        <div class="pay-mid"><div class="pay-nome">Crédito ${parc}x</div><div class="pay-sub">taxa ${taxaCred}%${imposto?' + imp '+imposto+'%':''}</div></div>
+        <div class="pay-val">${money(vCredito)}<div class="pay-parc">${parc}x de ${money(vCredito/parc)}</div></div>
+      </div>
     `;
   }
 }
@@ -2730,9 +2765,10 @@ function textoSimTroca(){
   const vUsado=parseFloat(String(getV('sim-val-usado')).replace(',','.'))||0;
   const modNovo=getV('sim-mod-novo'), modUsado=getV('sim-mod-usado');
   const difer=Math.max(0,vNovo-vUsado);
-  const tx=db.taxasCartao||{debito:1.5,credito:[]};
+  const tx=db.taxasCartao||{debito:1.5,imposto:0,credito:[]};
+  const imposto=Number(tx.imposto)||0;
   const parc=simState.parcCred||1;
-  const comTaxa=(base,taxa)=> taxa>0 ? base/(1-taxa/100) : base;
+  const comTaxa=(base,taxa)=>{ const t=taxa+imposto; return t>0 ? base/(1-t/100) : base; };
   const taxaCred=(tx.credito&&tx.credito[parc-1])||0;
   const vDebito=comTaxa(difer,tx.debito);
   const vCredito=comTaxa(difer,taxaCred);
@@ -2769,13 +2805,15 @@ function openTaxasCartao(){
   const html=`
     <div class="mini-lbl">Taxa do débito (%)</div>
     <input class="input" id="tx-debito" type="text" inputmode="decimal" value="${tx.debito||''}" placeholder="ex: 1,5">
+    <div class="mini-lbl" style="margin-top:14px">Imposto sobre cartão (%) — somado no débito e crédito</div>
+    <input class="input" id="tx-imposto" type="text" inputmode="decimal" value="${tx.imposto||''}" placeholder="ex: 3,0">
     <div class="mini-lbl" style="margin-top:14px">Taxas do crédito por parcela (%)</div>
     ${linhas}
   `;
   openSheet('Taxas do cartão', html, 'Salvar', ()=>{
     const cred=[];
     for(let i=0;i<21;i++){ cred.push(parseFloat(String(getV('tx-c-'+i)).replace(',','.'))||0); }
-    db.taxasCartao={ debito:parseFloat(String(getV('tx-debito')).replace(',','.'))||0, credito:cred };
+    db.taxasCartao={ debito:parseFloat(String(getV('tx-debito')).replace(',','.'))||0, imposto:parseFloat(String(getV('tx-imposto')).replace(',','.'))||0, credito:cred };
     saveDB(); closeSheet(); setTimeout(openSimulador,300); toast('Taxas salvas');
   });
 }
@@ -3132,7 +3170,7 @@ function openMenu(){
     </div>`:''}
     <input type="file" id="imp-input" accept="application/json" style="display:none" onchange="importBackup(event)">
     <button class="btn secondary" onclick="logout()" style="margin-top:16px">Sair da conta</button>
-    <div style="text-align:center;color:var(--text2);font-size:12px;margin-top:16px">Sistema de Gestão de Loja · v9</div>
+    <div style="text-align:center;color:var(--text2);font-size:12px;margin-top:16px">Sistema de Gestão de Loja · v10</div>
   `;
   openSheet('Menu', html);
 }
