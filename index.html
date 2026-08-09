@@ -677,8 +677,7 @@ function go(tab){
   el('page-title').textContent=TITLES[tab];
   // FAB só em telas que criam algo
   const fab=el('fab');
-  if(tab==='estoque' && podeEditar()){ fab.style.display='flex'; fab.innerHTML=plusIcon(); }
-  else if(tab==='clientes'){ fab.style.display='flex'; fab.innerHTML=plusIcon(); }
+  if(tab==='clientes'){ fab.style.display='flex'; fab.innerHTML=plusIcon(); }
   else fab.style.display='none';
   render(tab);
   renderPendente=false;
@@ -3445,7 +3444,7 @@ function openMenu(){
     </div>`:''}
     <input type="file" id="imp-input" accept="application/json" style="display:none" onchange="importBackup(event)">
     <button class="btn secondary" onclick="logout()" style="margin-top:16px">Sair da conta</button>
-    <div style="text-align:center;color:var(--text2);font-size:12px;margin-top:16px">Sistema de Gestão de Loja · v22</div>
+    <div style="text-align:center;color:var(--text2);font-size:12px;margin-top:16px">Sistema de Gestão de Loja · v23</div>
   `;
   openSheet('Menu', html);
 }
