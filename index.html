@@ -157,9 +157,11 @@ select.input{appearance:none;-webkit-appearance:none;background-image:url("data:
   border-top:.5px solid var(--line);
   display:flex;padding-bottom:var(--safe-b);
 }
-.tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:9px 0 7px;color:var(--text2);min-width:0}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0 5px;color:var(--text2);min-width:0}
 .tab svg{width:23px;height:23px}
-.tab span{font-size:9.5px;font-weight:500;white-space:nowrap}
+.tab-emoji{font-size:30px;line-height:1.1}
+.tab.active .tab-emoji{transform:scale(1.05)}
+.tab span{font-size:12px;font-weight:600;white-space:nowrap}
 .tab.active{color:var(--blue)}
 
 /* ---------- CARDS / GRID ---------- */
@@ -393,27 +395,27 @@ select.input{appearance:none;-webkit-appearance:none;background-image:url("data:
 
   <div class="tabbar">
     <button class="tab active" data-tab="dash" onclick="go('dash')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9.5"/></svg>
+      <span class="tab-emoji">🏠</span>
       <span>Início</span>
     </button>
     <button class="tab" data-tab="painel" onclick="go('painel')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="5" rx="1.5"/><rect x="13" y="10" width="8" height="11" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/></svg>
+      <span class="tab-emoji">📊</span>
       <span>Painel</span>
     </button>
     <button class="tab" data-tab="estoque" onclick="go('estoque')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M3 10h18M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+      <span class="tab-emoji">📦</span>
       <span>Estoque</span>
     </button>
     <button class="tab" data-tab="venda" onclick="go('venda')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/><path d="M2 3h3l2.4 12.4a1 1 0 0 0 1 .8h8.7a1 1 0 0 0 1-.8L21 7H6"/></svg>
+      <span class="tab-emoji">🛒</span>
       <span>Vender</span>
     </button>
     <button class="tab" data-tab="clientes" onclick="go('clientes')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.3 3.1-6 7-6s7 2.7 7 6"/></svg>
+      <span class="tab-emoji">👥</span>
       <span>Clientes</span>
     </button>
     <button class="tab" data-tab="relatorios" onclick="go('relatorios')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+      <span class="tab-emoji">📈</span>
       <span>Relatórios</span>
     </button>
   </div>
@@ -481,6 +483,10 @@ let carrinhoAcess=[]; // itens de acessório no carrinho: {id, qtd}
 const MODELOS_IPHONE=['iPhone 11','iPhone 11 Pro','iPhone 11 Pro Max','iPhone 12 mini','iPhone 12','iPhone 12 Pro','iPhone 12 Pro Max','iPhone 13 mini','iPhone 13','iPhone 13 Pro','iPhone 13 Pro Max','iPhone 14','iPhone 14 Plus','iPhone 14 Pro','iPhone 14 Pro Max','iPhone 15','iPhone 15 Plus','iPhone 15 Pro','iPhone 15 Pro Max','iPhone 16','iPhone 16 Plus','iPhone 16 Pro','iPhone 16 Pro Max','iPhone 16e','iPhone 17','iPhone 17 Pro','iPhone 17 Pro Max','iPhone 17e'];
 let simState={parcCred:1};
 let catsAbertas={}; // quais categorias de acessório estão expandidas
+let estoqueModo='aparelho'; // 'aparelho' ou 'servico'
+let catsServAbertas={}; // categorias de serviços expandidas
+let carrinhoServ=[]; // serviços selecionados pro orçamento
+let searchServ=''; let tempFotosServ=[]; let catalogoServSel=[];
 
 const CATS = ['iPhone','iPad','Apple Watch','MacBook','AirPods','Acessório'];
 const CAT_ICON = {'iPhone':'📱','iPad':'📲','Apple Watch':'⌚️','MacBook':'💻','AirPods':'🎧','Acessório':'🔌'};
@@ -490,7 +496,7 @@ let dbLoaded=false, savingToCloud=false, cloudVersion=0, renderPendente=false;
 function defaultDB(){
   return {
     users:[{id:uid(),user:'admin',pass:'1234',nome:'Administrador',role:'Administrador'}],
-    produtos:[], acessorios:[], clientes:[], vendas:[], compras:[], logins:[], contas:[], caixa:[], categorias:['Fornecedor','Aluguel','Retirada','Despesa','Salário','Outros'],
+    produtos:[], acessorios:[], servicos:[], clientes:[], vendas:[], compras:[], logins:[], contas:[], caixa:[], categorias:['Fornecedor','Aluguel','Retirada','Despesa','Salário','Outros'],
     condPag:{ parcelasCartao:3, descontoDinheiro:5, mostrarPix:true, mostrarCartao:true, mostrarDinheiro:true },
     taxasCartao:{ debito:1.5, imposto:0, credito:[3.5,4.5,5.5,6.5,7.5,8.5,9.5,10.5,11.5,12.5,13.5,14.5,15.5,16.5,17.5,18.5,19.5,20.5,21.5,22.5,23.5] }
   };
@@ -535,7 +541,7 @@ function loadDB(){
   const raw = localStorage.getItem(DB_KEY);
   if(raw){ try{ db = JSON.parse(raw); }catch(e){ db=null; } }
   if(!db) db = defaultDB();
-  if(!db.acessorios) db.acessorios=[]; if(!db.condPag) db.condPag={parcelasCartao:3,descontoDinheiro:5,mostrarPix:true,mostrarCartao:true,mostrarDinheiro:true}; if(!db.taxasCartao) db.taxasCartao={debito:1.5,imposto:0,credito:[3.5,4.5,5.5,6.5,7.5,8.5,9.5,10.5,11.5,12.5,13.5,14.5,15.5,16.5,17.5,18.5,19.5,20.5,21.5,22.5,23.5]}; if(db.taxasCartao && db.taxasCartao.imposto===undefined) db.taxasCartao.imposto=0; if(!db.logins) db.logins=[]; if(!db.contas) db.contas=[]; if(!db.caixa) db.caixa=[]; if(!db.categorias) db.categorias=["Fornecedor","Aluguel","Retirada","Despesa","Salário","Outros"];
+  if(!db.acessorios) db.acessorios=[]; if(!db.servicos) db.servicos=[]; if(!db.condPag) db.condPag={parcelasCartao:3,descontoDinheiro:5,mostrarPix:true,mostrarCartao:true,mostrarDinheiro:true}; if(!db.taxasCartao) db.taxasCartao={debito:1.5,imposto:0,credito:[3.5,4.5,5.5,6.5,7.5,8.5,9.5,10.5,11.5,12.5,13.5,14.5,15.5,16.5,17.5,18.5,19.5,20.5,21.5,22.5,23.5]}; if(db.taxasCartao && db.taxasCartao.imposto===undefined) db.taxasCartao.imposto=0; if(!db.logins) db.logins=[]; if(!db.contas) db.contas=[]; if(!db.caixa) db.caixa=[]; if(!db.categorias) db.categorias=["Fornecedor","Aluguel","Retirada","Despesa","Salário","Outros"];
   reconciliarVendidos();
   theme = localStorage.getItem('itronic_theme') || 'light';
 
@@ -561,7 +567,7 @@ function loadDB(){
             if(v < cloudVersion){ return; }
             cloudVersion = v;
             db = parsed;
-            if(!db.acessorios) db.acessorios=[]; if(!db.condPag) db.condPag={parcelasCartao:3,descontoDinheiro:5,mostrarPix:true,mostrarCartao:true,mostrarDinheiro:true}; if(!db.taxasCartao) db.taxasCartao={debito:1.5,imposto:0,credito:[3.5,4.5,5.5,6.5,7.5,8.5,9.5,10.5,11.5,12.5,13.5,14.5,15.5,16.5,17.5,18.5,19.5,20.5,21.5,22.5,23.5]}; if(db.taxasCartao && db.taxasCartao.imposto===undefined) db.taxasCartao.imposto=0; if(!db.logins) db.logins=[]; if(!db.contas) db.contas=[]; if(!db.caixa) db.caixa=[]; if(!db.categorias) db.categorias=["Fornecedor","Aluguel","Retirada","Despesa","Salário","Outros"];
+            if(!db.acessorios) db.acessorios=[]; if(!db.servicos) db.servicos=[]; if(!db.condPag) db.condPag={parcelasCartao:3,descontoDinheiro:5,mostrarPix:true,mostrarCartao:true,mostrarDinheiro:true}; if(!db.taxasCartao) db.taxasCartao={debito:1.5,imposto:0,credito:[3.5,4.5,5.5,6.5,7.5,8.5,9.5,10.5,11.5,12.5,13.5,14.5,15.5,16.5,17.5,18.5,19.5,20.5,21.5,22.5,23.5]}; if(db.taxasCartao && db.taxasCartao.imposto===undefined) db.taxasCartao.imposto=0; if(!db.logins) db.logins=[]; if(!db.contas) db.contas=[]; if(!db.caixa) db.caixa=[]; if(!db.categorias) db.categorias=["Fornecedor","Aluguel","Retirada","Despesa","Salário","Outros"];
             reconciliarVendidos();
             localStorage.setItem(DB_KEY, JSON.stringify(db));
             dbLoaded=true;
@@ -679,7 +685,7 @@ function go(tab){
   window.scrollTo(0,0);
 }
 function fabAction(){
-  if(currentTab==='estoque') openProduto();
+  if(currentTab==='estoque'){ if(estoqueModo==='servico') openNovoServico(); else openProduto(); }
   else if(currentTab==='clientes') openCliente();
 }
 const plusIcon=()=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>`;
@@ -1106,7 +1112,18 @@ function renderEstoque(){
     lista=lista.filter(p=>(p.modelo||'').toLowerCase().includes(q)||(p.imei||'').toLowerCase().includes(q)||(p.serie||'').toLowerCase().includes(q)||(p.marca||'').toLowerCase().includes(q));
   }
 
-  el('page-estoque').innerHTML=`
+  const toggleEstoque=`
+    <div style="display:flex;gap:8px;margin-bottom:14px">
+      <button class="btn ${estoqueModo==='aparelho'?'':'secondary'}" style="flex:1" onclick="estoqueModo='aparelho';renderEstoque()">📱 Aparelhos</button>
+      <button class="btn ${estoqueModo==='servico'?'':'secondary'}" style="flex:1" onclick="estoqueModo='servico';renderEstoque()">🔧 Assistência</button>
+    </div>`;
+
+  if(estoqueModo==='servico'){
+    el('page-estoque').innerHTML = toggleEstoque + renderAssistencia();
+    return;
+  }
+
+  el('page-estoque').innerHTML=toggleEstoque+`
     <div class="grid2" style="margin-bottom:2px">
       <div class="stat"><div class="lbl">Investido</div><div class="val sm money-in">${money(invest)}</div></div>
       <div class="stat"><div class="lbl">Disponíveis</div><div class="val">${disponiveis}</div></div>
@@ -1116,12 +1133,13 @@ function renderEstoque(){
       <div class="stat"><div class="lbl">Parados +45d</div><div class="val sm ${parados?'neg':''}">${parados}</div></div>
     </div>
 
-    <button class="btn secondary" onclick="abrirCatalogo()" style="margin:4px 0 8px">🛍️ Montar catálogo pro cliente</button>
+    <button class="btn" onclick="abrirCatalogo()" style="margin:14px 0 8px;background:#25D366">🛍️ Montar catálogo pro cliente</button>
     <div class="sec-title">Aparelhos</div>
     <div class="search">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
       <input placeholder="Buscar por modelo, IMEI ou série" value="${searchEstoque}" oninput="searchEstoque=this.value;renderEstoque();this.focus()">
     </div>
+    ${podeEditar()?`<button class="btn" onclick="openProduto()" style="margin:10px 0 14px;background:#25D366">+ Cadastrar aparelho</button>`:''}
     <div class="filters">
       ${['todos:Todos','disp:Disponíveis','res:Reservados','vend:Vendidos','parado:Parados'].map(f=>{const[k,l]=f.split(':');return `<button class="chip ${filterEstoque===k?'active':''}" onclick="setFiltroEstoque('${k}')">${l}</button>`}).join('')}
     </div>
@@ -1148,6 +1166,262 @@ function ordenarModelo(a,b){
   if(A.variante!==B.variante) return A.variante-B.variante; // normal, plus, pro, pro max
   return A.txt.localeCompare(B.txt);            // resto alfabético
 }
+const SERVICOS_PADRAO=['Troca de Tela','Troca de Bateria','Troca de Vidro Traseiro','Troca de Carcaça','Troca de Vidro de Tela','Troca de Câmeras'];
+
+function renderAssistencia(){
+  const isAdmin=session&&session.role==='Administrador';
+  let servs=db.servicos||[];
+  if(searchServ){
+    const q=searchServ.toLowerCase();
+    servs=servs.filter(s=>(s.nome||'').toLowerCase().includes(q)||(s.modelo||'').toLowerCase().includes(q)||(s.categoria||'').toLowerCase().includes(q));
+  }
+  // agrupa por categoria (tipo de serviço)
+  const grupos={};
+  servs.forEach(s=>{ const c=s.categoria||'Outros'; if(!grupos[c]) grupos[c]=[]; grupos[c].push(s); });
+  const ordem=SERVICOS_PADRAO.slice();
+  const cats=[];
+  ordem.forEach(c=>{ if(grupos[c]) cats.push(c); });
+  Object.keys(grupos).forEach(c=>{ if(!cats.includes(c)) cats.push(c); });
+
+  const lista = servs.length ? cats.map(cat=>{
+    const aberta=!!catsServAbertas[cat];
+    const itens=grupos[cat];
+    const primeiraFoto=itens.find(s=>s.fotos&&s.fotos[0]);
+    return `
+    <div class="list" style="margin-bottom:10px">
+      <div class="row" onclick="toggleCatServ('${cat.replace(/'/g,"\\'")}')" style="cursor:pointer;border-bottom:${aberta?'.5px solid var(--line)':'none'}">
+        <div class="thumb" style="${primeiraFoto?'padding:5px;background:#fff;border:1px solid var(--line)':''}">${primeiraFoto?`<img src="${imgFoto(primeiraFoto.fotos[0])}" style="width:100%;height:100%;object-fit:contain">`:'🔧'}</div>
+        <div class="info"><div class="t">${cat}</div><div class="s">${itens.length} ${itens.length===1?'serviço':'serviços'}</div></div>
+        <div class="right" style="font-size:20px;color:var(--text2);transform:rotate(${aberta?'90':'0'}deg);transition:transform .2s">›</div>
+      </div>
+      ${aberta?itens.map(s=>servRow(s,isAdmin)).join(''):''}
+    </div>`;
+  }).join('') : `<div class="empty">Nenhum serviço cadastrado.${podeEditar()?' Toque em "+ Cadastrar serviço".':''}</div>`;
+
+  const totalServ=servs.length;
+  const dispServ=servs.filter(s=>(s.situacao||'Disponível')==='Disponível').length;
+  const aguardServ=servs.filter(s=>s.situacao==='Aguardando pedido').length;
+  const investPecas=servs.reduce((sum,s)=>sum+(Number(s.custo)||0)*(s.qtd!=null?s.qtd:1),0);
+
+  return `
+    <div class="grid2" style="margin-bottom:2px">
+      <div class="stat"><div class="lbl">Investido em peças</div><div class="val sm money-in">${money(investPecas)}</div></div>
+      <div class="stat"><div class="lbl">Serviços</div><div class="val">${totalServ}</div></div>
+    </div>
+    <div class="grid2" style="margin:12px 0 4px">
+      <div class="stat"><div class="lbl">Disponíveis</div><div class="val sm">${dispServ}</div></div>
+      <div class="stat"><div class="lbl">Aguardando peça</div><div class="val sm ${aguardServ?'neg':''}">${aguardServ}</div></div>
+    </div>
+
+    <button class="btn" onclick="abrirCatalogoServ()" style="margin:14px 0 8px;background:#25D366">🛍️ Montar catálogo pro cliente</button>
+    <div class="sec-title">Serviços</div>
+    <div class="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      <input placeholder="Pesquisar serviço (ex: tela iPhone 13)" value="${searchServ||''}" oninput="searchServ=this.value;renderEstoque();this.focus()">
+    </div>
+    ${podeEditar()?`<button class="btn" onclick="openNovoServico()" style="margin:10px 0 14px;background:#25D366">+ Cadastrar serviço</button>`:''}
+    ${lista}
+    <div style="height:20px"></div>
+  `;
+}
+
+function servRow(s,isAdmin){
+  const situacao=s.situacao||'Disponível';
+  const badgeCor = situacao==='Disponível'?'#34c759':(situacao==='Aguardando pedido'?'#ff9500':'#ff3b30');
+  const badgeTxt = situacao==='Sem estoque'?'Sem peça':(situacao==='Aguardando pedido'?'Aguardando':(s.qtd!=null?s.qtd+' em estoque':'Disponível'));
+  return `<div class="row" onclick="acaoServico('${s.id}')">
+    <div class="thumb" style="${s.fotos&&s.fotos[0]?'padding:5px;background:#fff;border:1px solid var(--line)':''}">${s.fotos&&s.fotos[0]?`<img src="${imgFoto(s.fotos[0])}" style="width:100%;height:100%;object-fit:contain">`:'🔧'}</div>
+    <div class="info"><div class="t">${s.nome}</div><div class="s"><span style="color:${badgeCor};font-weight:600">${badgeTxt}</span>${s.modelo?' · '+s.modelo:''}${isAdmin&&s.custo?' · custo '+money(s.custo):''}</div></div>
+    <div class="right"><div class="p money-in">${money(s.venda)}</div>${chev()}</div>
+  </div>`;
+}
+
+function toggleCatServ(cat){ catsServAbertas[cat]=!catsServAbertas[cat]; renderEstoque(); }
+function openNovoServico(){ formServico(null); }
+function editarServico(id){ const s=(db.servicos||[]).find(x=>x.id===id); formServico(s); }
+function formServico(s){
+  if(!podeEditar()){ toast('Só o administrador pode cadastrar/editar'); return; }
+  tempFotosServ = s ? (s.fotos||[]).slice() : [];
+  const catsUsadas=[...new Set([...SERVICOS_PADRAO, ...(db.servicos||[]).map(x=>x.categoria).filter(Boolean)])];
+  const catAtual=s?s.categoria:'';
+  const optCats=['<option value="">— escolha o tipo —</option>']
+    .concat(catsUsadas.map(cc=>`<option value="${cc}" ${cc===catAtual?'selected':''}>${cc}</option>`))
+    .concat(['<option value="__nova__">+ Novo tipo...</option>']).join('');
+  const html=`
+    ${fld('Nome do serviço','sv-nome',{ph:'ex: Troca de Tela iPhone 13',val:s?s.nome:''})}
+    <div class="field"><label>Tipo de serviço</label>
+      <select class="input" id="sv-cat" onchange="if(this.value==='__nova__'){el('sv-cat-nova').style.display='block';el('sv-cat-nova').focus();}else{el('sv-cat-nova').style.display='none';}">${optCats}</select>
+      <input class="input" id="sv-cat-nova" placeholder="Digite o novo tipo" style="display:none;margin-top:8px" value="${catAtual&&!catsUsadas.includes(catAtual)?catAtual:''}">
+    </div>
+    ${fld('Modelo / compatibilidade','sv-modelo',{ph:'ex: iPhone 13, 13 Pro',val:s?s.modelo:''})}
+    ${selFld('Situação','sv-sit',['Disponível','Aguardando pedido','Sem estoque'],s?(s.situacao||'Disponível'):'Disponível')}
+    ${fld('Preço do serviço (cliente)','sv-venda',{ph:'0,00',val:s?s.venda:''})}
+    ${fld('Custo da peça (só você vê)','sv-custo',{ph:'0,00',val:s?s.custo:''})}
+    ${fld('Quantidade de peças (opcional)','sv-qtd',{ph:'deixe vazio se não controla',val:s&&s.qtd!=null?s.qtd:''})}
+    ${fld('Fornecedor da peça','sv-forn',{ph:'de onde compra',val:s?s.fornecedor:''})}
+    <div class="field"><label>Fotos</label>
+      <button class="btn secondary" onclick="el('sv-foto-input').click()" style="width:auto;padding:8px 14px">📷 Adicionar fotos</button>
+      <input type="file" id="sv-foto-input" accept="image/*,.jpg,.jpeg,.png,.webp,.heic,.heif" multiple style="display:none" onchange="addFotoServ(event)">
+      <div id="sv-fotos-grid" class="photo-grid" style="margin-top:10px"></div>
+    </div>
+  `;
+  openSheet(s?'Editar serviço':'Novo serviço', html, 'Salvar', ()=>{
+    const nome=getV('sv-nome').trim();
+    if(!nome){ toast('Informe o nome'); return; }
+    let categoria=getV('sv-cat');
+    if(categoria==='__nova__') categoria=getV('sv-cat-nova').trim();
+    else if(el('sv-cat-nova')&&el('sv-cat-nova').value.trim()&&categoria==='') categoria=getV('sv-cat-nova').trim();
+    const qtdTxt=getV('sv-qtd').trim();
+    const dados={
+      nome, categoria,
+      modelo:getV('sv-modelo').trim(),
+      situacao:getV('sv-sit'),
+      venda:parseFloat(String(getV('sv-venda')).replace(',','.'))||0,
+      custo:parseFloat(String(getV('sv-custo')).replace(',','.'))||0,
+      qtd: qtdTxt===''?null:(parseInt(qtdTxt)||0),
+      fornecedor:getV('sv-forn').trim()
+    };
+    converterFotosParaRefs(tempFotosServ.slice(), (refs)=>{
+      dados.fotos=refs;
+      if(s){ Object.assign(s,dados); toast('Serviço atualizado'); }
+      else { dados.id=uid(); dados.entrada=todayStr(); db.servicos.push(dados); toast('Serviço cadastrado'); }
+      saveDB(); closeSheet(); renderEstoque();
+    });
+  });
+  setTimeout(renderFotosServ,60);
+  if(s){
+    setTimeout(()=>{
+      const body=el('sheet-body');
+      if(body){ const b=document.createElement('button'); b.className='btn ghost'; b.style.marginTop='10px'; b.style.color='var(--red)'; b.textContent='Excluir serviço';
+        b.onclick=()=>askConfirm('Excluir este serviço?',()=>{ db.servicos=db.servicos.filter(x=>x.id!==s.id); carrinhoServ=carrinhoServ.filter(x=>x!==s.id); saveDB(); closeSheet(); renderEstoque(); toast('Excluído'); });
+        body.appendChild(b);
+      }
+    },80);
+  }
+}
+function addFotoServ(e){
+  const files=Array.from(e.target.files||[]); if(!files.length)return;
+  let pend=files.length, ok=0;
+  files.forEach(file=>{
+    comprimirFoto(file,(dataUrl)=>{
+      if(dataUrl){ tempFotosServ.push(dataUrl); ok++; }
+      pend--; if(pend===0){ renderFotosServ(); if(ok>0) toast(ok>1?ok+' fotos adicionadas':'Foto adicionada'); }
+    });
+  });
+  e.target.value='';
+}
+function renderFotosServ(){
+  const g=el('sv-fotos-grid'); if(!g) return;
+  g.innerHTML=tempFotosServ.map((f,i)=>`<div style="position:relative;display:inline-block"><img class="ph" style="width:80px;height:80px" src="${f}"><button onclick="tempFotosServ.splice(${i},1);renderFotosServ()" style="position:absolute;top:-6px;right:-6px;background:var(--red);color:#fff;width:22px;height:22px;border-radius:50%;font-size:14px">×</button></div>`).join('');
+}
+
+function acaoServico(id){
+  const s=(db.servicos||[]).find(x=>x.id===id);
+  if(!s) return;
+  const html=`
+    <div class="list">
+      ${podeEditar()?`<div class="row" onclick="closeSheet();setTimeout(()=>editarServico('${id}'),300)"><div class="thumb">✏️</div><div class="info"><div class="t">Editar serviço</div></div></div>`:''}
+      <div class="row" onclick="enviarOrcamentoServ('${id}','whats')"><div class="thumb">📤</div><div class="info"><div class="t">Enviar orçamento (WhatsApp)</div></div></div>
+      <div class="row" onclick="compartilharServFoto('${id}')"><div class="thumb">📷</div><div class="info"><div class="t">Compartilhar com foto</div></div></div>
+      <div class="row" onclick="enviarOrcamentoServ('${id}','copiar')"><div class="thumb">📋</div><div class="info"><div class="t">Copiar orçamento</div></div></div>
+    </div>`;
+  openSheet(s.nome, html);
+}
+function textoServico(s){
+  const L=[];
+  L.push('🔧 *'+s.nome+'*');
+  if(s.modelo) L.push('Compatível: '+s.modelo);
+  L.push('💰 '+money(s.venda));
+  L.push(blocoCondicoes(s.venda));
+  L.push('');
+  L.push('📲 iTronic Rio Verde');
+  return L.join('\n');
+}
+function enviarOrcamentoServ(id,modo){
+  const s=(db.servicos||[]).find(x=>x.id===id);
+  if(!s) return;
+  const texto=textoServico(s);
+  if(modo==='copiar'){
+    const ok=()=>toast('Orçamento copiado');
+    if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(texto).then(ok).catch(()=>copiarFallback(texto,ok));
+    else copiarFallback(texto,ok);
+    return;
+  }
+  const url='https://wa.me/?text='+encodeURIComponent(texto);
+  const a=document.createElement('a'); a.href=url; a.target='_blank'; a.rel='noopener'; document.body.appendChild(a); a.click(); a.remove();
+}
+async function compartilharServFoto(id){
+  const s=(db.servicos||[]).find(x=>x.id===id);
+  if(!s) return;
+  const texto=textoServico(s);
+  const foto=await new Promise(r=>resolverFoto(s.fotos&&s.fotos[0], r));
+  try{
+    if(foto && navigator.canShare){
+      const resp=await fetch(foto); const blob=await resp.blob();
+      const file=new File([blob],'servico.jpg',{type:blob.type||'image/jpeg'});
+      if(navigator.canShare({files:[file]})){ await navigator.share({files:[file],text:texto}); return; }
+    }
+    if(navigator.share){ await navigator.share({text:texto}); return; }
+  }catch(e){ if(e&&e.name==='AbortError') return; }
+  enviarOrcamentoServ(id,'whats');
+}
+function abrirCatalogoServ(){
+  const disp=(db.servicos||[]).filter(s=>(s.situacao||'Disponível')==='Disponível');
+  if(!disp.length){ toast('Nenhum serviço disponível'); return; }
+  const html=`
+    <div style="font-size:13px;color:var(--text2);margin-bottom:10px">Marque os serviços que quer enviar pro cliente:</div>
+    <div class="list">
+      ${disp.map(s=>{
+        const marcado=catalogoServSel.includes(s.id);
+        const thumb=temFoto(s.fotos&&s.fotos[0])?`<img src="${imgFoto(s.fotos[0])}">`:'🔧';
+        return `<div class="row" onclick="toggleCatServItem('${s.id}')">
+          <div class="thumb">${thumb}</div>
+          <div class="info"><div class="t">${s.nome}</div><div class="s">${[s.categoria,s.modelo].filter(Boolean).join(' · ')}</div></div>
+          <div class="right" style="font-size:22px">${marcado?'✅':'⬜️'}</div>
+        </div>`;
+      }).join('')}
+    </div>
+    <div style="height:8px"></div>
+    <button class="btn" onclick="enviarCatalogoServ('whats')" style="background:#25D366">Enviar no WhatsApp (${catalogoServSel.length})</button>
+    <button class="btn secondary" onclick="enviarCatalogoServ('copiar')" style="margin-top:8px">Copiar catálogo</button>
+  `;
+  openSheet('Montar catálogo', html);
+}
+function toggleCatServItem(id){
+  const i=catalogoServSel.indexOf(id);
+  if(i>=0) catalogoServSel.splice(i,1); else catalogoServSel.push(id);
+  abrirCatalogoServ();
+}
+function textoCatalogoServ(){
+  const L=[];
+  L.push('🔧 *SERVIÇOS DE ASSISTÊNCIA — iTronic Rio Verde*');
+  L.push('');
+  // agrupa por categoria os selecionados
+  const grupos={};
+  catalogoServSel.forEach(id=>{ const s=(db.servicos||[]).find(x=>x.id===id); if(!s) return; const c=s.categoria||'Outros'; if(!grupos[c]) grupos[c]=[]; grupos[c].push(s); });
+  Object.keys(grupos).forEach(cat=>{
+    L.push('*'+cat+'*');
+    grupos[cat].forEach(s=>{ L.push('• '+s.nome+(s.modelo?' ('+s.modelo+')':'')+' — '+money(s.venda)); });
+    L.push('');
+  });
+  L.push('📲 Traga seu aparelho para avaliação!');
+  L.push('iTronic Rio Verde');
+  return L.join('\n');
+}
+function enviarCatalogoServ(modo){
+  if(!catalogoServSel.length){ toast('Marque ao menos um serviço'); return; }
+  const texto=textoCatalogoServ();
+  if(modo==='copiar'){
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      navigator.clipboard.writeText(texto).then(()=>toast('Catálogo copiado')).catch(()=>copiarFallback(texto,()=>toast('Catálogo copiado')));
+    }else copiarFallback(texto,()=>toast('Catálogo copiado'));
+    return;
+  }
+  const url='https://wa.me/?text='+encodeURIComponent(texto);
+  const a=document.createElement('a'); a.href=url; a.target='_blank'; a.rel='noopener';
+  document.body.appendChild(a); a.click(); a.remove();
+}
+
 function renderEstoqueAgrupado(lista){
   // agrupa por categoria, na ordem preferida
   const ordem=['iPad','iPhone','Apple Watch','MacBook','AirPods','Acessório'];
@@ -1805,7 +2079,7 @@ function precarregarFotos(){
   if(!fbReady || !fbFotos) return;
   const ids=new Set();
   const coletar=(arr)=>{ (arr||[]).forEach(o=>{ (o.fotos||[]).forEach(f=>{ if(ehRefFoto(f)) ids.add(idDaRef(f)); }); }); };
-  coletar(db.produtos); coletar(db.acessorios);
+  coletar(db.produtos); coletar(db.acessorios); coletar(db.servicos);
   const pendentes=[...ids].filter(id=>!window.fotoCache[id]);
   if(!pendentes.length) return;
   let restantes=pendentes.length;
@@ -1846,6 +2120,7 @@ function otimizarFotos(){
   const tarefas=[];
   (db.produtos||[]).forEach(p=>{ if(Array.isArray(p.fotos)) p.fotos.forEach((f,i)=>{ if(!ehRefFoto(f)) tarefas.push({obj:p,idx:i}); }); });
   (db.acessorios||[]).forEach(a=>{ if(Array.isArray(a.fotos)) a.fotos.forEach((f,i)=>{ if(!ehRefFoto(f)) tarefas.push({obj:a,idx:i}); }); });
+  (db.servicos||[]).forEach(a=>{ if(Array.isArray(a.fotos)) a.fotos.forEach((f,i)=>{ if(!ehRefFoto(f)) tarefas.push({obj:a,idx:i}); }); });
   if(!tarefas.length){
     // nada embutido — mas por que está grande? mostra o diagnóstico
     const tam=Math.round(JSON.stringify(db).length/1024);
@@ -3170,7 +3445,7 @@ function openMenu(){
     </div>`:''}
     <input type="file" id="imp-input" accept="application/json" style="display:none" onchange="importBackup(event)">
     <button class="btn secondary" onclick="logout()" style="margin-top:16px">Sair da conta</button>
-    <div style="text-align:center;color:var(--text2);font-size:12px;margin-top:16px">Sistema de Gestão de Loja · v10</div>
+    <div style="text-align:center;color:var(--text2);font-size:12px;margin-top:16px">Sistema de Gestão de Loja · v22</div>
   `;
   openSheet('Menu', html);
 }
@@ -3258,7 +3533,7 @@ function montarBackupCompleto(){
   // devolve uma cópia do db com as fotos embutidas (resolve refs pelo cache) — backup completo
   const copia=JSON.parse(JSON.stringify(db));
   const embutir=(arr)=>{ (arr||[]).forEach(o=>{ if(Array.isArray(o.fotos)) o.fotos=o.fotos.map(f=> ehRefFoto(f) ? (window.fotoCache[idDaRef(f)]||f) : f ); }); };
-  embutir(copia.produtos); embutir(copia.acessorios);
+  embutir(copia.produtos); embutir(copia.acessorios); embutir(copia.servicos);
   return JSON.stringify(copia);
 }
 function exportBackup(){
