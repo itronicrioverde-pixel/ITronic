@@ -1193,7 +1193,7 @@ function renderAssistencia(){
         <div class="info"><div class="t">${cat}</div><div class="s">${itens.length} ${itens.length===1?'serviço':'serviços'}</div></div>
         <div class="right" style="font-size:20px;color:var(--text2);transform:rotate(${aberta?'90':'0'}deg);transition:transform .2s">›</div>
       </div>
-      ${aberta?itens.map(s=>servRow(s,isAdmin)).join(''):''}
+      ${aberta?itens.slice().sort((a,b)=>{const ord={Original:0,Premium:1,Paralela:2};return (ord[a.qualidade]??9)-(ord[b.qualidade]??9);}).map(s=>servRow(s,isAdmin)).join(''):''}
     </div>`;
   }).join('') : `<div class="empty">Nenhum serviço cadastrado.${podeEditar()?' Toque em "+ Cadastrar serviço".':''}</div>`;
 
@@ -1227,10 +1227,13 @@ function renderAssistencia(){
 function servRow(s,isAdmin){
   const situacao=s.situacao||'Disponível';
   const badgeCor = situacao==='Disponível'?'#34c759':(situacao==='Aguardando pedido'?'#ff9500':'#ff3b30');
-  const badgeTxt = situacao==='Sem estoque'?'Sem peça':(situacao==='Aguardando pedido'?'Aguardando':(s.qtd!=null?s.qtd+' em estoque':'Disponível'));
+  const badgeTxt = situacao==='Sem estoque'?'Sem peça':(situacao==='Aguardando pedido'?'Aguardando':'Disponível');
+  const qual=s.qualidade||'Original';
+  const qCor = qual==='Original'?'#0071e3':(qual==='Premium'?'#8b5cf6':'#ff9500');
+  const qBg = qual==='Original'?'#e3f2ff':(qual==='Premium'?'#f3ecff':'#fff0e6');
   return `<div class="row" onclick="acaoServico('${s.id}')">
     <div class="thumb" style="${s.fotos&&s.fotos[0]?'padding:5px;background:#fff;border:1px solid var(--line)':''}">${s.fotos&&s.fotos[0]?`<img src="${imgFoto(s.fotos[0])}" style="width:100%;height:100%;object-fit:contain">`:'🔧'}</div>
-    <div class="info"><div class="t">${s.nome}</div><div class="s"><span style="color:${badgeCor};font-weight:600">${badgeTxt}</span>${s.modelo?' · '+s.modelo:''}${isAdmin&&s.custo?' · custo '+money(s.custo):''}</div></div>
+    <div class="info"><div class="t"><span style="display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;background:${qBg};color:${qCor};margin-right:6px">${qual}</span>${s.modelo||''}</div><div class="s"><span style="color:${badgeCor};font-weight:600">${badgeTxt}</span>${isAdmin&&s.custo?' · custo '+money(s.custo):''}</div></div>
     <div class="right"><div class="p money-in">${money(s.venda)}</div>${chev()}</div>
   </div>`;
 }
@@ -1253,10 +1256,10 @@ function formServico(s){
       <input class="input" id="sv-cat-nova" placeholder="Digite o novo tipo" style="display:none;margin-top:8px" value="${catAtual&&!catsUsadas.includes(catAtual)?catAtual:''}">
     </div>
     ${fld('Modelo / compatibilidade','sv-modelo',{ph:'ex: iPhone 13, 13 Pro',val:s?s.modelo:''})}
+    ${selFld('Qualidade da peça','sv-qual',['Original','Premium','Paralela'],s?(s.qualidade||'Original'):'Original')}
     ${selFld('Situação','sv-sit',['Disponível','Aguardando pedido','Sem estoque'],s?(s.situacao||'Disponível'):'Disponível')}
     ${fld('Preço do serviço (cliente)','sv-venda',{ph:'0,00',val:s?s.venda:''})}
     ${fld('Custo da peça (só você vê)','sv-custo',{ph:'0,00',val:s?s.custo:''})}
-    ${fld('Quantidade de peças (opcional)','sv-qtd',{ph:'deixe vazio se não controla',val:s&&s.qtd!=null?s.qtd:''})}
     ${fld('Fornecedor da peça','sv-forn',{ph:'de onde compra',val:s?s.fornecedor:''})}
     <div class="field"><label>Fotos</label>
       <button class="btn secondary" onclick="el('sv-foto-input').click()" style="width:auto;padding:8px 14px">📷 Adicionar fotos</button>
@@ -1270,14 +1273,13 @@ function formServico(s){
     let categoria=getV('sv-cat');
     if(categoria==='__nova__') categoria=getV('sv-cat-nova').trim();
     else if(el('sv-cat-nova')&&el('sv-cat-nova').value.trim()&&categoria==='') categoria=getV('sv-cat-nova').trim();
-    const qtdTxt=getV('sv-qtd').trim();
     const dados={
       nome, categoria,
       modelo:getV('sv-modelo').trim(),
+      qualidade:getV('sv-qual'),
       situacao:getV('sv-sit'),
       venda:parseFloat(String(getV('sv-venda')).replace(',','.'))||0,
       custo:parseFloat(String(getV('sv-custo')).replace(',','.'))||0,
-      qtd: qtdTxt===''?null:(parseInt(qtdTxt)||0),
       fornecedor:getV('sv-forn').trim()
     };
     converterFotosParaRefs(tempFotosServ.slice(), (refs)=>{
@@ -1329,6 +1331,7 @@ function acaoServico(id){
 function textoServico(s){
   const L=[];
   L.push('🔧 *'+s.nome+'*');
+  if(s.qualidade) L.push('Peça: '+s.qualidade);
   if(s.modelo) L.push('Compatível: '+s.modelo);
   L.push('💰 '+money(s.venda));
   L.push(blocoCondicoes(s.venda));
@@ -1400,7 +1403,7 @@ function textoCatalogoServ(){
   catalogoServSel.forEach(id=>{ const s=(db.servicos||[]).find(x=>x.id===id); if(!s) return; const c=s.categoria||'Outros'; if(!grupos[c]) grupos[c]=[]; grupos[c].push(s); });
   Object.keys(grupos).forEach(cat=>{
     L.push('*'+cat+'*');
-    grupos[cat].forEach(s=>{ L.push('• '+s.nome+(s.modelo?' ('+s.modelo+')':'')+' — '+money(s.venda)); });
+    grupos[cat].forEach(s=>{ L.push('• '+(s.qualidade?s.qualidade+' — ':'')+s.nome+(s.modelo?' ('+s.modelo+')':'')+' — '+money(s.venda)); });
     L.push('');
   });
   L.push('📲 Traga seu aparelho para avaliação!');
@@ -3444,7 +3447,7 @@ function openMenu(){
     </div>`:''}
     <input type="file" id="imp-input" accept="application/json" style="display:none" onchange="importBackup(event)">
     <button class="btn secondary" onclick="logout()" style="margin-top:16px">Sair da conta</button>
-    <div style="text-align:center;color:var(--text2);font-size:12px;margin-top:16px">Sistema de Gestão de Loja · v23</div>
+    <div style="text-align:center;color:var(--text2);font-size:12px;margin-top:16px">Sistema de Gestão de Loja · v24</div>
   `;
   openSheet('Menu', html);
 }
