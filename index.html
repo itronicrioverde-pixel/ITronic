@@ -127,6 +127,8 @@ select.input{appearance:none;-webkit-appearance:none;background-image:url("data:
 .btn.ghost{background:none;color:var(--blue);font-weight:500}
 .btn.danger{background:var(--red);color:#fff}
 .login-hint{text-align:center;color:var(--text2);font-size:13px;margin-top:22px;line-height:1.6}
+.login-version{text-align:center;margin-top:40px;font-size:12px;font-weight:700;letter-spacing:3px;color:var(--text2);opacity:.55}
+.login-version span{font-weight:400;letter-spacing:1px;opacity:.8}
 
 /* ---------- APP SHELL ---------- */
 #app{display:none;min-height:100dvh;padding-bottom:calc(var(--nav-h) + var(--safe-b) + 10px)}
@@ -374,6 +376,7 @@ select.input{appearance:none;-webkit-appearance:none;background-image:url("data:
   <div class="login-hint" id="login-hint">
     Primeiro acesso: <b>admin</b> / senha <b>1234</b>
   </div>
+  <div class="login-version">SISTEMA DE GESTÃO <span>· v28 · 2026</span></div>
 </div>
 
 <!-- APP -->
@@ -3449,7 +3452,7 @@ function openMenu(){
     </div>`:''}
     <input type="file" id="imp-input" accept="application/json" style="display:none" onchange="importBackup(event)">
     <button class="btn secondary" onclick="logout()" style="margin-top:16px">Sair da conta</button>
-    <div style="text-align:center;color:var(--text2);font-size:12px;margin-top:16px">Sistema de Gestão de Loja · v27</div>
+    <div style="text-align:center;color:var(--text2);font-size:12px;margin-top:16px">Sistema de Gestão de Loja · v28</div>
   `;
   openSheet('Menu', html);
 }
