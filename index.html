@@ -159,13 +159,13 @@ select.input{appearance:none;-webkit-appearance:none;background-image:url("data:
   border-top:.5px solid var(--line);
   display:flex;align-items:flex-start;justify-content:space-around;
   padding-bottom:max(6px, calc(var(--safe-b) - 8px));
-  padding-top:6px;
+  padding-top:10px;
 }
-.tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:2px 0;color:var(--text2);min-width:0}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:2px 0;color:var(--text2);min-width:0}
 .tab svg{width:23px;height:23px}
-.tab-emoji{font-size:30px;line-height:1.1}
+.tab-emoji{font-size:32px;line-height:1}
 .tab.active .tab-emoji{transform:scale(1.05)}
-.tab span{font-size:12px;font-weight:600;white-space:nowrap}
+.tab span{font-size:13px;font-weight:600;white-space:nowrap}
 .tab.active{color:var(--blue)}
 
 /* ---------- CARDS / GRID ---------- */
@@ -376,7 +376,7 @@ select.input{appearance:none;-webkit-appearance:none;background-image:url("data:
   <div class="login-hint" id="login-hint">
     Primeiro acesso: <b>admin</b> / senha <b>1234</b>
   </div>
-  <div class="login-version">SISTEMA DE GESTÃO <span>· v28 · 2026</span></div>
+  <div class="login-version">SISTEMA DE GESTÃO <span>· v30 · 2026</span></div>
 </div>
 
 <!-- APP -->
@@ -835,6 +835,16 @@ function renderDash(){
       <div class="lbl">${ic('<path d="M3 6h18M3 12h18M3 18h18"/>')} Caixa de hoje (saldo)</div>
       <div class="val sm money-in ${caixaSaldoHoje()>=0?'pos':'neg'}">${money(caixaSaldoHoje())}</div>
       <div style="font-size:12px;color:var(--text2);margin-top:2px">Toque para ver entradas e saídas</div>
+      <div style="border-top:.5px solid var(--line);margin:12px 0 0;padding-top:12px;display:flex;justify-content:space-between;gap:12px">
+        <div style="flex:1">
+          <div style="font-size:12px;color:var(--text2)">Caixa do mês</div>
+          <div class="money-in ${resumoCaixa('mes').saldo>=0?'pos':'neg'}" style="font-size:17px;font-weight:700">${money(resumoCaixa('mes').saldo)}</div>
+        </div>
+        <div style="flex:1;text-align:right">
+          <div style="font-size:12px;color:var(--text2)">Vendido no mês</div>
+          <div class="money-in" style="font-size:17px;font-weight:700">${money(s.vendaMes)}</div>
+        </div>
+      </div>
     </div>
 
     <div class="sec-title">Atalhos</div>
@@ -3452,7 +3462,7 @@ function openMenu(){
     </div>`:''}
     <input type="file" id="imp-input" accept="application/json" style="display:none" onchange="importBackup(event)">
     <button class="btn secondary" onclick="logout()" style="margin-top:16px">Sair da conta</button>
-    <div style="text-align:center;color:var(--text2);font-size:12px;margin-top:16px">Sistema de Gestão de Loja · v28</div>
+    <div style="text-align:center;color:var(--text2);font-size:12px;margin-top:16px">Sistema de Gestão de Loja · v30</div>
   `;
   openSheet('Menu', html);
 }
