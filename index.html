@@ -378,7 +378,7 @@ select.input{appearance:none;-webkit-appearance:none;background-image:url("data:
   <div class="login-hint" id="login-hint">
     Primeiro acesso: <b>admin</b> / senha <b>1234</b>
   </div>
-  <div class="login-version">SISTEMA DE GESTÃO <span>· v34 · 2026</span></div>
+  <div class="login-version">SISTEMA DE GESTÃO <span>· v35 · 2026</span></div>
 </div>
 
 <!-- APP -->
@@ -1634,12 +1634,11 @@ function renderCarrinhoAcess(isAdmin){
 
     ${qtdCarrinho>0?`
       <div class="card" style="margin-top:14px">
-        <div class="detail-line"><span class="k">${qtdCarrinho} item(ns) no carrinho</span><span class="v money-in" style="font-size:18px">${money(totalCarrinho)}</span></div>
+        <div class="detail-line"><span class="k">${qtdCarrinho} acessório(s) no carrinho 🛒</span><span class="v money-in" style="font-size:18px">${money(totalCarrinho)}</span></div>
       </div>
-      <button class="btn" onclick="pagamentoAcess()" style="margin-top:10px">Ir para pagamento</button>
-      <button class="btn secondary" onclick="enviarPedidoAcess('whats')" style="margin-top:8px;background:#25D366;color:#fff">📤 Enviar pedido no WhatsApp</button>
+      <div style="font-size:12px;color:var(--text2);text-align:center;margin-top:6px">Toque no 🛒 lá em cima para ver o carrinho completo</div>
+      <button class="btn secondary" onclick="enviarPedidoAcess('whats')" style="margin-top:10px;background:#25D366;color:#fff">📤 Enviar pedido no WhatsApp</button>
       <button class="btn secondary" onclick="enviarPedidoAcess('copiar')" style="margin-top:8px">Copiar pedido/orçamento</button>
-      <button class="btn ghost" onclick="carrinhoAcess=[];renderVenda()" style="margin-top:4px">Limpar carrinho</button>
     `:''}
     <div style="height:20px"></div>
   `;
@@ -1653,21 +1652,18 @@ function mudarQtdAcess(id,delta){
   const a=(db.acessorios||[]).find(x=>x.id===id);
   if(!a) return;
   if(delta>0 && (a.situacao&&a.situacao!=='Disponível')){ toast('Acessório '+a.situacao.toLowerCase()); return; }
-  let item=carrinhoAcess.find(x=>x.id===id);
-  if(!item){ if(delta>0){ carrinhoAcess.push({id,qtd:1}); } }
+  // opera direto no carrinho unificado
+  let item=carrinho.find(x=>x.tipo==='acessorio'&&x.id===id);
+  if(!item){ if(delta>0){ carrinho.push({tipo:'acessorio', id, qtd:1}); } }
   else{
     item.qtd+=delta;
-    if(item.qtd<=0) carrinhoAcess=carrinhoAcess.filter(x=>x.id!==id);
+    if(item.qtd<=0) carrinho=carrinho.filter(x=>!(x.tipo==='acessorio'&&x.id===id));
     else if(item.qtd>a.qtd){ item.qtd=a.qtd; toast('Só tem '+a.qtd+' em estoque'); }
   }
-  sincronizarCarrinhoAcess();
+  // mantém carrinhoAcess como espelho (algumas telas ainda leem dele)
+  carrinhoAcess=carrinho.filter(x=>x.tipo==='acessorio').map(x=>({id:x.id,qtd:x.qtd}));
   renderVenda();
   atualizarBadgeCarrinho();
-}
-function sincronizarCarrinhoAcess(){
-  // espelha o carrinho de acessórios dentro do carrinho unificado
-  carrinho=carrinho.filter(it=>it.tipo!=='acessorio'); // limpa os acessórios antigos
-  carrinhoAcess.forEach(x=>carrinho.push({tipo:'acessorio', id:x.id, qtd:x.qtd}));
 }
 let tempFotosAcess=[];
 function blocoCondicoes(valor){
@@ -3578,7 +3574,7 @@ function openMenu(){
     </div>`:''}
     <input type="file" id="imp-input" accept="application/json" style="display:none" onchange="importBackup(event)">
     <button class="btn secondary" onclick="logout()" style="margin-top:16px">Sair da conta</button>
-    <div style="text-align:center;color:var(--text2);font-size:12px;margin-top:16px">Sistema de Gestão de Loja · v34</div>
+    <div style="text-align:center;color:var(--text2);font-size:12px;margin-top:16px">Sistema de Gestão de Loja · v35</div>
   `;
   openSheet('Menu', html);
 }
