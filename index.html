@@ -378,7 +378,7 @@ select.input{appearance:none;-webkit-appearance:none;background-image:url("data:
   <div class="login-hint" id="login-hint">
     Primeiro acesso: <b>admin</b> / senha <b>1234</b>
   </div>
-  <div class="login-version">SISTEMA DE GESTÃO <span>· v33 · 2026</span></div>
+  <div class="login-version">SISTEMA DE GESTÃO <span>· v34 · 2026</span></div>
 </div>
 
 <!-- APP -->
@@ -728,13 +728,19 @@ function atualizarBadgeCarrinho(){
 function abrirCarrinhoUnificado(){
   const q=carrinhoQtd();
   if(!q){ toast('Carrinho vazio — adicione aparelhos ou acessórios'); return; }
-  // Etapa 2: mostra o que tem no carrinho (versão simples; a tela completa vem na Etapa 4)
   const linhas=carrinho.map(it=>{
     if(it.tipo==='aparelho'){ const p=db.produtos.find(x=>x.id===it.id); if(!p) return ''; return `<div class="row"><div class="thumb">${temFoto(p.fotos&&p.fotos[0])?`<img src="${imgFoto(p.fotos[0])}">`:(CAT_ICON[p.cat]||'📦')}</div><div class="info"><div class="t">${p.marca} ${p.modelo}</div><div class="s">${[p.cor,p.armazenamento].filter(Boolean).join(' · ')}</div></div><div class="right"><div class="p money-in">${money(p.venda)}</div></div></div>`; }
+    if(it.tipo==='acessorio'){ const a=(db.acessorios||[]).find(x=>x.id===it.id); if(!a) return ''; return `<div class="row"><div class="thumb" style="${a.fotos&&a.fotos[0]?'padding:5px;background:#fff;border:1px solid var(--line)':''}">${temFoto(a.fotos&&a.fotos[0])?`<img src="${imgFoto(a.fotos[0])}" style="width:100%;height:100%;object-fit:contain">`:'🎧'}</div><div class="info"><div class="t">${it.qtd}x ${a.nome}</div><div class="s">${a.sub||''}</div></div><div class="right"><div class="p money-in">${money((Number(a.venda)||0)*it.qtd)}</div></div></div>`; }
     return '';
   }).join('');
+  const total=carrinho.reduce((s,it)=>{
+    if(it.tipo==='aparelho'){ const p=db.produtos.find(x=>x.id===it.id); return s+(p?Number(p.venda)||0:0); }
+    if(it.tipo==='acessorio'){ const a=(db.acessorios||[]).find(x=>x.id===it.id); return s+(a?(Number(a.venda)||0)*it.qtd:0); }
+    return s;
+  },0);
   const html=`<div class="list">${linhas}</div>
-    <button class="btn ghost" onclick="carrinho=[];atualizarBadgeCarrinho();closeSheet();" style="margin-top:12px;color:var(--red)">Esvaziar carrinho</button>`;
+    <div class="card" style="margin-top:12px"><div class="detail-line"><span class="k">Total</span><span class="v money-in" style="font-size:20px;font-weight:700">${money(total)}</span></div></div>
+    <button class="btn ghost" onclick="carrinho=carrinho.filter(x=>x.tipo!=='aparelho');carrinhoAcess=[];atualizarBadgeCarrinho();closeSheet();" style="margin-top:8px;color:var(--red)">Esvaziar carrinho</button>`;
   openSheet('Carrinho ('+q+')', html);
 }
 
@@ -1654,7 +1660,14 @@ function mudarQtdAcess(id,delta){
     if(item.qtd<=0) carrinhoAcess=carrinhoAcess.filter(x=>x.id!==id);
     else if(item.qtd>a.qtd){ item.qtd=a.qtd; toast('Só tem '+a.qtd+' em estoque'); }
   }
+  sincronizarCarrinhoAcess();
   renderVenda();
+  atualizarBadgeCarrinho();
+}
+function sincronizarCarrinhoAcess(){
+  // espelha o carrinho de acessórios dentro do carrinho unificado
+  carrinho=carrinho.filter(it=>it.tipo!=='acessorio'); // limpa os acessórios antigos
+  carrinhoAcess.forEach(x=>carrinho.push({tipo:'acessorio', id:x.id, qtd:x.qtd}));
 }
 let tempFotosAcess=[];
 function blocoCondicoes(valor){
@@ -3565,7 +3578,7 @@ function openMenu(){
     </div>`:''}
     <input type="file" id="imp-input" accept="application/json" style="display:none" onchange="importBackup(event)">
     <button class="btn secondary" onclick="logout()" style="margin-top:16px">Sair da conta</button>
-    <div style="text-align:center;color:var(--text2);font-size:12px;margin-top:16px">Sistema de Gestão de Loja · v33</div>
+    <div style="text-align:center;color:var(--text2);font-size:12px;margin-top:16px">Sistema de Gestão de Loja · v34</div>
   `;
   openSheet('Menu', html);
 }
