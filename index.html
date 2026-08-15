@@ -147,6 +147,8 @@ select.input{appearance:none;-webkit-appearance:none;background-image:url("data:
 }
 .icon-btn svg{width:19px;height:19px}
 .icon-btn:active{opacity:.6}
+.cart-btn{position:relative}
+.cart-badge{position:absolute;top:-3px;right:-3px;background:var(--red);color:#fff;font-size:11px;font-weight:700;min-width:18px;height:18px;border-radius:9px;display:flex;align-items:center;justify-content:center;padding:0 4px;border:2px solid var(--bg2)}
 .page{display:none;padding:16px 16px calc(80px + var(--safe-b));animation:fade .25s ease}
 .page.active{display:block}
 @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
@@ -376,7 +378,7 @@ select.input{appearance:none;-webkit-appearance:none;background-image:url("data:
   <div class="login-hint" id="login-hint">
     Primeiro acesso: <b>admin</b> / senha <b>1234</b>
   </div>
-  <div class="login-version">SISTEMA DE GESTÃO <span>· v31 · 2026</span></div>
+  <div class="login-version">SISTEMA DE GESTÃO <span>· v33 · 2026</span></div>
 </div>
 
 <!-- APP -->
@@ -384,6 +386,10 @@ select.input{appearance:none;-webkit-appearance:none;background-image:url("data:
   <div class="topbar">
     <h1 id="page-title">Início</h1>
     <div class="actions">
+      <button class="icon-btn cart-btn" onclick="abrirCarrinhoUnificado()" title="Carrinho" id="cart-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1.4"/><circle cx="18" cy="21" r="1.4"/><path d="M2 3h3l2.4 12.4a1 1 0 0 0 1 .8h8.7a1 1 0 0 0 1-.8L21 7H6"/></svg>
+        <span class="cart-badge" id="cart-badge" style="display:none">0</span>
+      </button>
       <button class="icon-btn" onclick="toggleTheme()" title="Tema" id="theme-btn"></button>
       <button class="icon-btn" onclick="openMenu()" title="Menu">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="5" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="12" cy="19" r="1.4"/></svg>
@@ -485,6 +491,9 @@ let painelMes='todos'; // mês escolhido no painel ('todos' = geral)
 let vendaCart={cliente:null, produto:null, produtoId:null, desconto:0, pagamentos:[]};
 let vendaModo='aparelho'; // 'aparelho', 'acessorio' ou 'simulador'
 let carrinhoAcess=[]; // itens de acessório no carrinho: {id, qtd}
+// Carrinho unificado: aparelhos e acessórios juntos para uma venda só
+// cada item: {tipo:'aparelho'|'acessorio', id, qtd}
+let carrinho=[];
 const MODELOS_IPHONE=['iPhone 11','iPhone 11 Pro','iPhone 11 Pro Max','iPhone 12 mini','iPhone 12','iPhone 12 Pro','iPhone 12 Pro Max','iPhone 13 mini','iPhone 13','iPhone 13 Pro','iPhone 13 Pro Max','iPhone 14','iPhone 14 Plus','iPhone 14 Pro','iPhone 14 Pro Max','iPhone 15','iPhone 15 Plus','iPhone 15 Pro','iPhone 15 Pro Max','iPhone 16','iPhone 16 Plus','iPhone 16 Pro','iPhone 16 Pro Max','iPhone 16e','iPhone 17','iPhone 17 Pro','iPhone 17 Pro Max','iPhone 17e'];
 let simState={parcCred:1};
 let catsAbertas={}; // quais categorias de acessório estão expandidas
@@ -703,6 +712,30 @@ function render(tab){
   if(tab==='venda') renderVenda();
   if(tab==='clientes') renderClientes();
   if(tab==='relatorios') renderRelatorios();
+  atualizarBadgeCarrinho();
+}
+
+/* ============ CARRINHO UNIFICADO ============ */
+function carrinhoQtd(){
+  return carrinho.reduce((s,it)=>s+(it.qtd||1),0);
+}
+function atualizarBadgeCarrinho(){
+  const b=el('cart-badge'); if(!b) return;
+  const q=carrinhoQtd();
+  if(q>0){ b.textContent=q; b.style.display='flex'; }
+  else b.style.display='none';
+}
+function abrirCarrinhoUnificado(){
+  const q=carrinhoQtd();
+  if(!q){ toast('Carrinho vazio — adicione aparelhos ou acessórios'); return; }
+  // Etapa 2: mostra o que tem no carrinho (versão simples; a tela completa vem na Etapa 4)
+  const linhas=carrinho.map(it=>{
+    if(it.tipo==='aparelho'){ const p=db.produtos.find(x=>x.id===it.id); if(!p) return ''; return `<div class="row"><div class="thumb">${temFoto(p.fotos&&p.fotos[0])?`<img src="${imgFoto(p.fotos[0])}">`:(CAT_ICON[p.cat]||'📦')}</div><div class="info"><div class="t">${p.marca} ${p.modelo}</div><div class="s">${[p.cor,p.armazenamento].filter(Boolean).join(' · ')}</div></div><div class="right"><div class="p money-in">${money(p.venda)}</div></div></div>`; }
+    return '';
+  }).join('');
+  const html=`<div class="list">${linhas}</div>
+    <button class="btn ghost" onclick="carrinho=[];atualizarBadgeCarrinho();closeSheet();" style="margin-top:12px;color:var(--red)">Esvaziar carrinho</button>`;
+  openSheet('Carrinho ('+q+')', html);
 }
 
 /* ============ CÁLCULOS ============ */
@@ -2661,9 +2694,35 @@ function openClienteFromVenda(){
 function selCliente(id){ vendaCart.cliente=db.clientes.find(c=>c.id===id); closeSheet(); renderVenda(); }
 function pickProduto(){
   const disp=db.produtos.filter(p=>p.status==='Disponível');
-  const html= disp.length?`<div class="list">${disp.map(p=>`<div class="row" onclick="selProduto('${p.id}')"><div class="thumb">${temFoto(p.fotos&&p.fotos[0])?`<img src="${imgFoto(p.fotos[0])}">`:(CAT_ICON[p.cat]||'📦')}</div><div class="info"><div class="t">${p.marca} ${p.modelo}</div><div class="s">${[p.cor,p.armazenamento].filter(Boolean).join(' · ')}</div></div><div class="right"><div class="p money-in">${money(p.venda)}</div></div></div>`).join('')}</div>`
+  const html= disp.length?`
+    <div style="font-size:13px;color:var(--text2);margin-bottom:10px">Toque no aparelho para vender agora, ou no 🛒 para adicionar ao carrinho.</div>
+    <div class="list">${disp.map(p=>{
+      const noCart=carrinho.some(it=>it.tipo==='aparelho'&&it.id===p.id);
+      return `<div class="row">
+        <div class="thumb" onclick="selProduto('${p.id}')">${temFoto(p.fotos&&p.fotos[0])?`<img src="${imgFoto(p.fotos[0])}">`:(CAT_ICON[p.cat]||'📦')}</div>
+        <div class="info" onclick="selProduto('${p.id}')"><div class="t">${p.marca} ${p.modelo}</div><div class="s">${[p.cor,p.armazenamento].filter(Boolean).join(' · ')}</div></div>
+        <div class="right" style="display:flex;align-items:center;gap:10px">
+          <div class="p money-in">${money(p.venda)}</div>
+          <button onclick="addAoCarrinhoAparelho('${p.id}')" style="width:36px;height:36px;border-radius:10px;background:${noCart?'var(--green)':'var(--blue)'};color:#fff;font-size:18px;flex-shrink:0">${noCart?'✓':'🛒'}</button>
+        </div>
+      </div>`;
+    }).join('')}</div>`
     :`<div class="empty">Nenhum aparelho disponível no estoque.</div>`;
   openSheet('Escolher aparelho', html);
+}
+function addAoCarrinhoAparelho(id){
+  const p=db.produtos.find(x=>x.id===id);
+  if(!p){ toast('Aparelho não encontrado'); return; }
+  if(carrinho.some(it=>it.tipo==='aparelho'&&it.id===id)){
+    // já está no carrinho: remove (toque de novo tira)
+    carrinho=carrinho.filter(it=>!(it.tipo==='aparelho'&&it.id===id));
+    toast('Removido do carrinho');
+  }else{
+    carrinho.push({tipo:'aparelho', id, qtd:1});
+    toast('✓ '+p.marca+' '+p.modelo+' no carrinho');
+  }
+  atualizarBadgeCarrinho();
+  pickProduto(); // re-renderiza a lista pra atualizar o botão
 }
 function selProduto(id){ vendaCart.produto=db.produtos.find(p=>p.id===id); vendaCart.produtoId=id; closeSheet(); renderVenda(); }
 
@@ -3506,7 +3565,7 @@ function openMenu(){
     </div>`:''}
     <input type="file" id="imp-input" accept="application/json" style="display:none" onchange="importBackup(event)">
     <button class="btn secondary" onclick="logout()" style="margin-top:16px">Sair da conta</button>
-    <div style="text-align:center;color:var(--text2);font-size:12px;margin-top:16px">Sistema de Gestão de Loja · v31</div>
+    <div style="text-align:center;color:var(--text2);font-size:12px;margin-top:16px">Sistema de Gestão de Loja · v33</div>
   `;
   openSheet('Menu', html);
 }
